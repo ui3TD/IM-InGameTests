@@ -132,7 +132,8 @@ list isn't changed, because settings writes are blocked in test mode.
 - can drop idol variables written by mods (`--drop-girl-variable REGEX`),
 - prints anything that still looks like a file path or Workshop reference.
 
-Then check the result with `--vanilla`.
+Then check the result with `tools/check_save.py`, which finds broken references and other problems
+that crash or quietly break a load, and run it once with `--vanilla`.
 
 ## Ignoring known errors
 
@@ -168,6 +169,7 @@ run_ingame_tests.py      host script: build, stage, launch, wait, report
 ignore.txt               shared error-ignore patterns
 fixtures/default.json    included test save (sanitized; other saves here are not committed)
 tools/sanitize_save.py   make a shareable fixture from your own save
+tools/check_save.py      check a save for broken references before using it
 tools/savefile.py        shared save reading and writing
 source/
   Plugin.cs              BepInEx entry point; inert unless -imtest
