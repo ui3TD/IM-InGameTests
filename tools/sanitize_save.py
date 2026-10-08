@@ -61,7 +61,7 @@ def main() -> int:
     player["GroupName"] = args.group_name
 
     counts = {old: 0 for old in renames}
-    # Longest first, so a name contained in another (e.g. "Pigs" in "SubPigs") is handled by the longer one.
+    # Longest first, so a name contained in another (e.g. "Stars" in "Shooting Stars") is handled by the longer one.
     ordered = sorted(renames, key=len, reverse=True)
 
     def rename(container, key, value):
