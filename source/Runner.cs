@@ -130,6 +130,21 @@ namespace InGameTests
                 yield break;
             }
 
+            if (Plugin.Options.Only.Count > 0)
+            {
+                foreach (string name in ModFilter.UnmatchedNames())
+                {
+                    result.Passed = false;
+                    result.Failures.Add("--only " + name + ": no installed mod has that folder name, Workshop ID, title or HarmonyID");
+                }
+                if (!result.Passed)
+                {
+                    yield break;
+                }
+            }
+            result.Data["enabledMods"] = string.Join(", ",
+                Mods._Mods.Where(m => m != null && m.IsEnabled()).Select(m => m.Title).Distinct().ToArray());
+
             // Let mod loaders finish logging and any startup popups settle.
             yield return new WaitForSecondsRealtime(2f);
 
@@ -161,7 +176,9 @@ namespace InGameTests
             // Post-load popups and tweens.
             yield return new WaitForSecondsRealtime(3f);
             result.Data["loadedDate"] = staticVars.dateTime.ToString("yyyy-MM-dd HH:mm");
-            result.Data["mods"] = Plugin.Options.Vanilla ? "all disabled (--vanilla)" : "as configured in game";
+            result.Data["mods"] = Plugin.Options.Vanilla ? "all disabled (--vanilla)"
+                : Plugin.Options.Only.Count > 0 ? "only " + string.Join(", ", Plugin.Options.Only.ToArray()) + " (--only)"
+                : "as configured in game";
         }
 
         private static void OnLoad() => saveLoaded = true;

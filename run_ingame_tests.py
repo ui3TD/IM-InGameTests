@@ -101,6 +101,8 @@ def main() -> int:
     ap.add_argument("--game-dir", type=Path, help="Idol Manager install folder (default: found via Steam)")
     ap.add_argument("--vanilla", action="store_true",
                     help="treat every mod as disabled for this run (your mod settings are not changed)")
+    ap.add_argument("--only", action="append", default=[], metavar="MOD",
+                    help="enable only this mod (folder name, Workshop ID, title or HarmonyID); repeatable")
     ap.add_argument("--allow-input", action="store_true",
                     help="let keyboard and mouse reach the game (blocked by default so stray input can't change a run)")
     ap.add_argument("--sound", action="store_true", help="don't mute the game")
@@ -141,6 +143,8 @@ def main() -> int:
            "-imtest-weeks", str(args.weeks), "-imtest-timescale", str(args.timescale)]
     if args.vanilla:
         cmd.append("-imtest-vanilla")
+    for name in args.only:
+        cmd += ["-imtest-only", name]
     if args.allow_input:
         cmd.append("-imtest-allow-input")
     if args.sound:

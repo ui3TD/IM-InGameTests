@@ -48,16 +48,6 @@ namespace InGameTests
         private static bool Prefix() => false;
     }
 
-    // Applied by Plugin.Awake only with -imtest-vanilla: run the unmodded game.
-    internal static class Vanilla_IsModEnabled
-    {
-        internal static bool Prefix(ref bool __result)
-        {
-            __result = false;
-            return false;
-        }
-    }
-
     // Last step of Mods.LoadModsCoroutine, after mod loaders hooked into LoadMods have applied patches.
     [HarmonyPatch(typeof(Mods), nameof(Mods.StopSpinner))]
     internal static class Mods_StopSpinner_Signal

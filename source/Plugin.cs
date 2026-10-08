@@ -35,7 +35,8 @@ namespace InGameTests
             // Tells the host script the runner is alive (it gives up early without this).
             File.WriteAllText(Path.Combine(Options.OutDir, "started.txt"), DateTime.Now.ToString("o"));
             LogCapture.Start();
-            Logger.LogInfo("In-game test mode: suite=" + Options.Suite + (Options.Vanilla ? " (vanilla)" : "") + " out=" + Options.OutDir);
+            Logger.LogInfo("In-game test mode: suite=" + Options.Suite + (Options.Vanilla ? " (vanilla)" : "")
+                + (Options.Only.Count > 0 ? " (only: " + string.Join(", ", Options.Only.ToArray()) + ")" : "") + " out=" + Options.OutDir);
 
             // Every step is guarded: the game ships a stripped Unity, so an API that compiles
             // can still be missing at runtime. A failure is reported in results.json, and the
@@ -51,12 +52,12 @@ namespace InGameTests
                     Try("patch " + type.Name, () => harmony.CreateClassProcessor(type).Patch());
                 }
             }
-            if (Options.Vanilla)
+            if (Options.Vanilla || Options.Only.Count > 0)
             {
-                // Every mod reads as disabled for this session only; settings writes are blocked.
-                Try("vanilla mode", () => harmony.Patch(
+                // Mod selection for this session only; settings writes are blocked.
+                Try("mod filter", () => harmony.Patch(
                     AccessTools.Method(typeof(staticVars._settings), nameof(staticVars._settings.IsModEnabled)),
-                    prefix: new HarmonyMethod(typeof(Vanilla_IsModEnabled), nameof(Vanilla_IsModEnabled.Prefix))));
+                    prefix: new HarmonyMethod(typeof(ModFilter), nameof(ModFilter.Prefix))));
             }
 
             StartCoroutine(Runner.Run());
@@ -91,6 +92,7 @@ namespace InGameTests
         public float TimeoutSeconds = 600f;
         public bool Vanilla;
         public bool AllowInput;
+        public readonly System.Collections.Generic.List<string> Only = new System.Collections.Generic.List<string>();
         public bool Sound;
 
         /// <summary>Returns null when the game was not launched in test mode.</summary>
@@ -105,6 +107,9 @@ namespace InGameTests
                     case "-imtest":
                         options = options ?? new TestOptions();
                         options.Suite = next ?? "all";
+                        break;
+                    case "-imtest-only":
+                        Ensure(ref options).Only.Add(next);
                         break;
                     case "-imtest-allow-input":
                         Ensure(ref options).AllowInput = true;

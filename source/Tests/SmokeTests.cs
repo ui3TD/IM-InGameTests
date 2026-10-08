@@ -19,7 +19,6 @@ namespace InGameTests.Tests
         private static readonly AccessTools.FieldRef<ActiveDialogueController, data_dialogues._dialogue._node> ActiveNode =
             AccessTools.FieldRefAccess<ActiveDialogueController, data_dialogues._dialogue._node>("activeNode");
 
-        private static readonly Regex HarmonyIdPattern = new Regex("\"HarmonyID\"\\s*:\\s*\"([^\"]+)\"");
 
         /// <summary>Every enabled Harmony mod has at least one patch applied by its HarmonyID.</summary>
         [InGameTest(Order = 0)]
@@ -40,7 +39,7 @@ namespace InGameTests.Tests
             var copiesById = new Dictionary<string, List<Mods._mod>>(StringComparer.Ordinal);
             foreach (Mods._mod mod in Mods._Mods)
             {
-                string id = ReadHarmonyId(mod);
+                string id = ModFilter.HarmonyId(mod);
                 if (id == null)
                 {
                     continue;
@@ -261,24 +260,6 @@ namespace InGameTests.Tests
                    + " minutesPerSecond=" + staticVars.dateTimeAddMinutesPerSecond
                    + " forcedPause=" + staticVars.dateTimeForcedPause
                    + " popup=" + popup;
-        }
-
-        private static string ReadHarmonyId(Mods._mod mod)
-        {
-            try
-            {
-                string info = Path.Combine(mod.Path, "info.json");
-                if (!File.Exists(info))
-                {
-                    return null;
-                }
-                Match m = HarmonyIdPattern.Match(File.ReadAllText(info));
-                return m.Success ? m.Groups[1].Value : null;
-            }
-            catch (Exception)
-            {
-                return null;
-            }
         }
     }
 }

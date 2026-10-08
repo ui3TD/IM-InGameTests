@@ -12,6 +12,7 @@ python run_ingame_tests.py                  # smoke suite: load the save, run 4 
 python run_ingame_tests.py --weeks 12       # longer run
 python run_ingame_tests.py --suite all -v   # every suite, full stack traces
 python run_ingame_tests.py --vanilla        # same tests with every mod disabled, as a baseline
+python run_ingame_tests.py --only "My Mod"  # only this mod enabled (repeat --only for more)
 ```
 
 ```
@@ -111,11 +112,17 @@ private static IEnumerator ClockMovesWhenUnpaused(TestContext ctx)
   (`MissingMethodException`). For example, `AudioListener.volume` can't be set. Prefer APIs the game itself uses.
 - Run a suite with `--suite mymod`, or every suite with `--suite all`.
 
-## Baseline runs (`--vanilla`)
+## Choosing mods (`--vanilla`, `--only`)
 
-`--vanilla` treats every mod as disabled for that run only. Your mod settings aren't changed, because
-settings writes are blocked in test mode. Use it to tell whether a failure comes from the game itself
-or from a mod, and to check that a save works without any mods installed.
+By default a run uses the mods enabled in the game. Both options below apply to that run only. Your mod
+list isn't changed, because settings writes are blocked in test mode.
+
+- `--vanilla` disables every mod. Use it to tell whether a failure comes from the game itself or from a
+  mod, and to check that a save works without any mods installed.
+- `--only MOD` enables just that mod, even if it's disabled in the game. Repeat it to test mods
+  together, e.g. a mod and its dependency. `MOD` can be the folder name, Workshop ID, title or
+  HarmonyID, ignoring case. A name that matches no installed mod fails the run, so a typo can't
+  silently test nothing. The report lists the mods that were enabled.
 
 ## Sharing saves
 
@@ -148,6 +155,7 @@ Some errors don't come from the mod you're testing. Errors the unmodded game alw
 | `--timeout` | 300 | Seconds before the game is killed. |
 | `--game-dir` | from Steam | Idol Manager install folder. |
 | `--vanilla` | | Run with every mod disabled. |
+| `--only` | | Enable only this mod (repeatable). |
 | `--allow-input` | | Let keyboard and mouse input reach the game. |
 | `--sound` | | Don't mute the game. |
 | `--no-build` | | Skip building the plugin. |
@@ -164,6 +172,7 @@ source/
   Plugin.cs              BepInEx entry point; inert unless -imtest
   Runner.cs              bootstrap (menu -> load save), test discovery, [InGameTest], TestContext
   SafetyPatches.cs       blocks saves and achievements in test mode
+  ModFilter.cs           --vanilla / --only mod selection
   InputBlock.cs          ignores keyboard and mouse during runs
   Mute.cs                zero game volume during runs
   LogCapture.cs          Unity + BepInEx error capture, ignore list
