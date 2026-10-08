@@ -1,0 +1,4 @@
+# Extra errors to ignore, one .NET regex per line, matched against "message\nstack trace".
+# Errors the unmodded game always logs are already built into LogCapture.cs.
+# Put errors that come from your own setup (other installed mods) in ignore.local.txt,
+# which is not committed.

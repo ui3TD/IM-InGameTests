@@ -1,0 +1,6 @@
+bin/
+obj/
+# Game saves are personal; bring your own
+fixtures/*.json
+# Errors specific to your own installed mods
+ignore.local.txt
