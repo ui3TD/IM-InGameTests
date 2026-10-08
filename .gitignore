@@ -1,6 +1,7 @@
 bin/
 obj/
-# Game saves are personal; bring your own
+# Personal game saves; only the sanitized default fixture is shared
 fixtures/*.json
+!fixtures/default.json
 # Errors specific to your own installed mods
 ignore.local.txt

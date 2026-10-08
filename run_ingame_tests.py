@@ -94,11 +94,13 @@ def print_summary(results: dict, verbose: bool) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--suite", default="smoke", help="test suite to run ('all' runs every [InGameTest])")
-    ap.add_argument("--save", type=Path, default=HERE / "fixtures" / "smoke.json", help="fixture save to load")
+    ap.add_argument("--save", type=Path, default=HERE / "fixtures" / "default.json", help="fixture save to load")
     ap.add_argument("--weeks", type=int, default=4, help="in-game weeks to advance")
     ap.add_argument("--timescale", type=float, default=20.0, help="Time.timeScale while advancing")
     ap.add_argument("--timeout", type=float, default=300.0, help="seconds before the game is killed")
     ap.add_argument("--game-dir", type=Path, help="Idol Manager install folder (default: found via Steam)")
+    ap.add_argument("--vanilla", action="store_true",
+                    help="treat every mod as disabled for this run (your mod settings are not changed)")
     ap.add_argument("--no-build", action="store_true", help="skip building the runner plugin")
     ap.add_argument("-v", "--verbose", action="store_true", help="full stack traces and per-mod patch counts")
     args = ap.parse_args()
@@ -134,6 +136,8 @@ def main() -> int:
     cmd = [str(game_dir / "IM.exe"),
            "-imtest", args.suite, "-imtest-run", run_id,
            "-imtest-weeks", str(args.weeks), "-imtest-timescale", str(args.timescale)]
+    if args.vanilla:
+        cmd.append("-imtest-vanilla")
     print(f"Launching game (run {run_id}) ...")
     start = time.monotonic()
     proc = subprocess.Popen(cmd, cwd=str(game_dir), env=env)

@@ -35,8 +35,16 @@ namespace InGameTests
             LogCapture.Start();
             LogCapture.LoadIgnoreFile(Path.Combine(Options.OutDir, "ignore.txt"));
             UnityEngine.Application.runInBackground = true;
-            new Harmony(PluginGuid).PatchAll(typeof(Plugin).Assembly);
-            Logger.LogInfo("In-game test mode: suite=" + Options.Suite + " out=" + Options.OutDir);
+            var harmony = new Harmony(PluginGuid);
+            harmony.PatchAll(typeof(Plugin).Assembly);
+            if (Options.Vanilla)
+            {
+                // Every mod reads as disabled for this session only; settings writes are blocked.
+                harmony.Patch(
+                    AccessTools.Method(typeof(staticVars._settings), nameof(staticVars._settings.IsModEnabled)),
+                    prefix: new HarmonyMethod(typeof(Vanilla_IsModEnabled), nameof(Vanilla_IsModEnabled.Prefix)));
+            }
+            Logger.LogInfo("In-game test mode: suite=" + Options.Suite + (Options.Vanilla ? " (vanilla)" : "") + " out=" + Options.OutDir);
             StartCoroutine(Runner.Run());
         }
     }
@@ -50,6 +58,7 @@ namespace InGameTests
         public int Weeks = 4;
         public float TimeScale = 20f;
         public float TimeoutSeconds = 600f;
+        public bool Vanilla;
 
         /// <summary>Returns null when the game was not launched in test mode.</summary>
         public static TestOptions Parse(string[] args)
@@ -63,6 +72,9 @@ namespace InGameTests
                     case "-imtest":
                         options = options ?? new TestOptions();
                         options.Suite = next ?? "all";
+                        break;
+                    case "-imtest-vanilla":
+                        Ensure(ref options).Vanilla = true;
                         break;
                     case "-imtest-run":
                         Ensure(ref options).RunId = next;

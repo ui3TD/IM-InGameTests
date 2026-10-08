@@ -153,6 +153,7 @@ namespace InGameTests
             // Post-load popups and tweens.
             yield return new WaitForSecondsRealtime(3f);
             result.Data["loadedDate"] = staticVars.dateTime.ToString("yyyy-MM-dd HH:mm");
+            result.Data["mods"] = Plugin.Options.Vanilla ? "all disabled (--vanilla)" : "as configured in game";
         }
 
         private static void OnLoad() => saveLoaded = true;

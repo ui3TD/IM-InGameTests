@@ -11,6 +11,7 @@ to a file and quits. A typical smoke run takes about 40 seconds.
 python run_ingame_tests.py                  # smoke suite: load the save, run 4 in-game weeks
 python run_ingame_tests.py --weeks 12       # longer run
 python run_ingame_tests.py --suite all -v   # every suite, full stack traces
+python run_ingame_tests.py --vanilla        # same tests with every mod disabled, as a baseline
 ```
 
 ```
@@ -39,8 +40,8 @@ The build compiles against the game's own DLLs in `IM_Data\Managed`.
 
 ## Setup
 
-1. Put a freeplay save in `fixtures/smoke.json` (see [fixtures/README.md](fixtures/README.md)), or pass `--save <path>`.
-2. Close the game, then run `python run_ingame_tests.py`.
+Close the game, then run `python run_ingame_tests.py`. A mid-game test save comes included
+(`fixtures/default.json`). To use your own save instead, see [fixtures/README.md](fixtures/README.md).
 
 The script builds the plugin and copies it to `<game>\BepInEx\plugins\InGameTests\`. Next it launches
 `IM.exe -imtest <suite> ...` and waits for `results.json`. The game window opens and closes on its own.
@@ -102,6 +103,22 @@ private static IEnumerator ClockMovesWhenUnpaused(TestContext ctx)
 - Use `WaitForSecondsRealtime`, not `WaitForSeconds`, because `Time.timeScale` may be raised.
 - Run a suite with `--suite mymod`, or every suite with `--suite all`.
 
+## Baseline runs (`--vanilla`)
+
+`--vanilla` treats every mod as disabled for that run only. Your mod settings aren't changed, because
+settings writes are blocked in test mode. Use it to tell whether a failure comes from the game itself
+or from a mod, and to check that a save works without any mods installed.
+
+## Sharing saves
+
+`tools/sanitize_save.py` turns a save into a fixture you can share. It:
+- replaces the player's name, group names and save timestamp,
+- strips the mod part from portrait asset IDs,
+- can drop idol variables written by mods (`--drop-girl-variable REGEX`),
+- prints anything that still looks like a file path or Workshop reference.
+
+Then check the result with `--vanilla`.
+
 ## Ignoring known errors
 
 Some errors don't come from the mod you're testing. Errors the unmodded game always logs are built in
@@ -117,11 +134,12 @@ Some errors don't come from the mod you're testing. Errors the unmodded game alw
 | Option | Default | |
 |---|---|---|
 | `--suite` | `smoke` | Suite to run. `all` runs every suite. |
-| `--save` | `fixtures/smoke.json` | Save to load. |
+| `--save` | `fixtures/default.json` | Save to load. |
 | `--weeks` | 4 | In-game weeks to advance. |
 | `--timescale` | 20 | `Time.timeScale` while advancing. |
 | `--timeout` | 300 | Seconds before the game is killed. |
 | `--game-dir` | from Steam | Idol Manager install folder. |
+| `--vanilla` | | Run with every mod disabled. |
 | `--no-build` | | Skip building the plugin. |
 | `-v` | | Full stack traces and per-mod patch counts. |
 
@@ -130,7 +148,8 @@ Some errors don't come from the mod you're testing. Errors the unmodded game alw
 ```
 run_ingame_tests.py      host script: build, stage, launch, wait, report
 ignore.txt               shared error-ignore patterns
-fixtures/                your save (not committed)
+fixtures/default.json    included test save (sanitized; other saves here are not committed)
+tools/sanitize_save.py   make a shareable fixture from your own save
 source/
   Plugin.cs              BepInEx entry point; inert unless -imtest
   Runner.cs              bootstrap (menu -> load save), test discovery, [InGameTest], TestContext
