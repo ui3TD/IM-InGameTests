@@ -1,8 +1,11 @@
 """Turn an Idol Manager save into a shareable test fixture.
 
 - Replaces the player's name, the player's group names and the save's name and timestamp.
-- Strips the mod part of portrait asset IDs (a Workshop or local portrait pack the
-  reader may not have). The game falls back to a vanilla asset of the same type.
+- Makes every idol portrait use base-game parts only. A part from a Workshop or local
+  portrait pack (which the reader may not have) keeps its ID without the mod name if the
+  base game has that part, and otherwise becomes the first part of the same body;
+  modded accessories are dropped. A part the game doesn't know would be swapped for
+  another body's and drawn misaligned.
 - Optionally drops idol variables written by mods (--drop-girl-variable REGEX).
 
 Prints what it changed and a list of any strings that still look mod-specific, so you
@@ -17,7 +20,7 @@ import json
 import re
 from pathlib import Path
 
-from savefile import load, walk, write
+from savefile import BASE_GAME_PORTRAITS, in_base_game, load, portrait_part, walk, write
 
 GENERATED_LAST_SAVE = "2000-01-01 00:00:00"
 
@@ -74,27 +77,48 @@ def main() -> int:
     for old, n in counts.items():
         report.append(f"group {old!r} -> {renames[old]!r} ({n} occurrences)")
 
-    # Portrait asset IDs: "<type> <body> <part> <mod>" -> "<type> <body> <part>".
-    stripped = 0
+    # Portraits: every part must exist in the base game and belong to the portrait's body,
+    # or the game substitutes another body's part and draws it misaligned.
+    portrait_counts = {"stripped": 0, "replaced": 0, "accessories dropped": 0}
 
-    def strip_assets(node):
-        nonlocal stripped
+    def fix_portrait(assets):
+        body_entry = next((a for a in assets if a.get("type") == "0"), None)
+        body_part = portrait_part(body_entry["asset_id"]) if body_entry else None
+        body = body_part[1] if body_part and body_part[1] in BASE_GAME_PORTRAITS else 0
+        kept = []
+        for asset in assets:
+            old = asset.get("asset_id", "")
+            part = portrait_part(old)
+            if part is None:
+                kept.append(asset)
+                continue
+            base_id = f"{part[0]} {part[1]} {part[2]}"
+            if in_base_game(base_id) and part[1] == body:
+                new = base_id
+            elif asset.get("type") == "3":
+                portrait_counts["accessories dropped"] += 1
+                continue
+            else:
+                new = f"{asset.get('type')} {body} 0"  # every base-game body has a part 0 of each type
+            if new != old:
+                portrait_counts["stripped" if new == base_id else "replaced"] += 1
+                asset["asset_id"] = new
+            kept.append(asset)
+        return kept
+
+    def fix_portraits(node):
         if isinstance(node, dict):
             for key, value in node.items():
                 if key == "textureAssets" and isinstance(value, list):
-                    for asset in value:
-                        parts = str(asset.get("asset_id", "")).split(" ")
-                        if len(parts) > 3:
-                            asset["asset_id"] = " ".join(parts[:3])
-                            stripped += 1
+                    node[key] = fix_portrait(value)
                 else:
-                    strip_assets(value)
+                    fix_portraits(value)
         elif isinstance(node, list):
             for value in node:
-                strip_assets(value)
+                fix_portraits(value)
 
-    strip_assets(data)
-    report.append(f"modded portrait asset IDs stripped: {stripped}")
+    fix_portraits(data)
+    report.append("portrait parts: " + ", ".join(f"{n} {what}" for what, n in portrait_counts.items()))
 
     # Mod-written idol variables.
     if args.drop_girl_variable:

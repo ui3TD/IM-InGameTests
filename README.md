@@ -128,7 +128,7 @@ list isn't changed, because settings writes are blocked in test mode.
 
 `tools/sanitize_save.py` turns a save into a fixture you can share. It:
 - replaces the player's name, group names and save timestamp,
-- strips the mod part from portrait asset IDs,
+- swaps portrait parts from mods for base-game parts of the same body,
 - can drop idol variables written by mods (`--drop-girl-variable REGEX`),
 - prints anything that still looks like a file path or Workshop reference.
 
