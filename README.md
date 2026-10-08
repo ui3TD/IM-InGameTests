@@ -42,7 +42,9 @@ The build compiles against the game's own DLLs in `IM_Data\Managed`.
 ## Setup
 
 Close the game, then run `python run_ingame_tests.py`. A mid-game test save comes included
-(`fixtures/default.json`). To use your own save instead, see [fixtures/README.md](fixtures/README.md).
+(`fixtures/default.json`). It has the game's common states ready to build on, from injured idols
+and a cafe to a world tour waiting to launch. [fixtures/README.md](fixtures/README.md) lists them
+with their IDs and explains how to use your own save instead.
 
 The script builds the plugin and copies it to `<game>\BepInEx\plugins\InGameTests\`. Next it launches
 `IM.exe -imtest <suite> ...` and waits for `results.json`. The game window opens and closes on its own.
@@ -168,8 +170,10 @@ Some errors don't come from the mod you're testing. Errors the unmodded game alw
 run_ingame_tests.py      host script: build, stage, launch, wait, report
 ignore.txt               shared error-ignore patterns
 fixtures/default.json    included test save (sanitized; other saves here are not committed)
+fixtures/README.md       what the included save contains, with IDs
 tools/sanitize_save.py   make a shareable fixture from your own save
 tools/check_save.py      check a save for broken references before using it
+tools/build_fixture.py   add the documented states to the included save
 tools/savefile.py        shared save reading and writing
 source/
   Plugin.cs              BepInEx entry point; inert unless -imtest
