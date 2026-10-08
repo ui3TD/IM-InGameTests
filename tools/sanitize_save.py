@@ -17,23 +17,9 @@ import json
 import re
 from pathlib import Path
 
+from savefile import load, walk, write
+
 GENERATED_LAST_SAVE = "2000-01-01 00:00:00"
-
-
-def walk(node, fn):
-    """Apply fn(container, key, value) to every scalar string in the JSON tree."""
-    if isinstance(node, dict):
-        for key, value in node.items():
-            if isinstance(value, (dict, list)):
-                walk(value, fn)
-            elif isinstance(value, str):
-                fn(node, key, value)
-    elif isinstance(node, list):
-        for i, value in enumerate(node):
-            if isinstance(value, (dict, list)):
-                walk(value, fn)
-            elif isinstance(value, str):
-                fn(node, i, value)
 
 
 def main() -> int:
@@ -47,7 +33,7 @@ def main() -> int:
                     help="remove idol variables fully matching REGEX (repeatable)")
     args = ap.parse_args()
 
-    data = json.loads(args.input.read_text(encoding="utf-8-sig"))
+    data = load(args.input)
     report = []
 
     # Player identity and save metadata.
@@ -134,8 +120,7 @@ def main() -> int:
         if len(name) >= 3 and name in json.dumps(data, ensure_ascii=False):
             suspicious.add(f"old player name still present: {name}")
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(data, ensure_ascii=False, separators=(", ", ":")), encoding="utf-8")
+    write(data, args.output)
 
     print("\n".join(report))
     if suspicious:

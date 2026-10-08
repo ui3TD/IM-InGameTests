@@ -168,6 +168,7 @@ run_ingame_tests.py      host script: build, stage, launch, wait, report
 ignore.txt               shared error-ignore patterns
 fixtures/default.json    included test save (sanitized; other saves here are not committed)
 tools/sanitize_save.py   make a shareable fixture from your own save
+tools/savefile.py        shared save reading and writing
 source/
   Plugin.cs              BepInEx entry point; inert unless -imtest
   Runner.cs              bootstrap (menu -> load save), test discovery, [InGameTest], TestContext
