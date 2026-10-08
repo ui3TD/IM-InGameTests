@@ -101,6 +101,9 @@ def main() -> int:
     ap.add_argument("--game-dir", type=Path, help="Idol Manager install folder (default: found via Steam)")
     ap.add_argument("--vanilla", action="store_true",
                     help="treat every mod as disabled for this run (your mod settings are not changed)")
+    ap.add_argument("--allow-input", action="store_true",
+                    help="let keyboard and mouse reach the game (blocked by default so stray input can't change a run)")
+    ap.add_argument("--sound", action="store_true", help="don't mute the game")
     ap.add_argument("--no-build", action="store_true", help="skip building the runner plugin")
     ap.add_argument("-v", "--verbose", action="store_true", help="full stack traces and per-mod patch counts")
     args = ap.parse_args()
@@ -138,11 +141,22 @@ def main() -> int:
            "-imtest-weeks", str(args.weeks), "-imtest-timescale", str(args.timescale)]
     if args.vanilla:
         cmd.append("-imtest-vanilla")
+    if args.allow_input:
+        cmd.append("-imtest-allow-input")
+    if args.sound:
+        cmd.append("-imtest-sound")
     print(f"Launching game (run {run_id}) ...")
     start = time.monotonic()
     proc = subprocess.Popen(cmd, cwd=str(game_dir), env=env)
 
+    started_path = out_dir / "started.txt"
     while not results_path.exists():
+        if not started_path.exists() and time.monotonic() - start > 60:
+            # The plugin writes started.txt in Awake; without it nothing will ever report.
+            print("The test runner did not start within 60s (is BepInEx loading plugins?); killing the game.")
+            print(f"See {game_dir / 'BepInEx' / 'LogOutput.log'}")
+            subprocess.run(["taskkill", "/IM", "IM.exe", "/F"], capture_output=True)
+            return 2
         if proc.poll() is not None:
             # Steam may relaunch the game itself; keep waiting for a fresh IM.exe briefly.
             time.sleep(5)

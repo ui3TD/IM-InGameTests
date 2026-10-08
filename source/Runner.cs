@@ -110,6 +110,14 @@ namespace InGameTests
 
         private static IEnumerator Bootstrap(TestResult result)
         {
+            if (Plugin.StartupErrors.Count > 0)
+            {
+                result.Passed = false;
+                result.Failures.AddRange(Plugin.StartupErrors);
+                result.Failures.Add("Not loading the save: save and achievement blocking may not be in place.");
+                yield break;
+            }
+
             LogCapture.Phase = "main-menu";
             yield return WaitFor(
                 () => Mods_StopSpinner_Signal.ModsLoaded
@@ -165,6 +173,7 @@ namespace InGameTests
             var ctx = new TestContext { Result = result };
             LogCapture.Phase = result.Name;
             int logStart = LogCapture.Count;
+            int inputStart = InputBlock_Buttons.Suppressed;
             float start = Time.realtimeSinceStartup;
 
             IEnumerator body = null;
@@ -202,6 +211,11 @@ namespace InGameTests
             }
 
             Time.timeScale = 1f;
+            int blocked = InputBlock_Buttons.Suppressed - inputStart;
+            if (blocked > 0)
+            {
+                result.Notes.Add("Blocked " + blocked + " keyboard/mouse input reads during this test");
+            }
             AddLogFailures(result, logStart);
             result.Seconds = Time.realtimeSinceStartup - start;
         }

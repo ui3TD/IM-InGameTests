@@ -1,3 +1,4 @@
+using HarmonyLib;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -73,6 +74,35 @@ namespace InGameTests.Tests
             {
                 ctx.Note("Choice taken: " + choice);
             }
+        }
+
+        /// <summary>Player input is blocked (unless --allow-input) and the game is muted (unless --sound).</summary>
+        [InGameTest(Suite = "selftest", Order = 1)]
+        private static IEnumerator InputBlockedAndMuted(TestContext ctx)
+        {
+            if (!Plugin.Options.AllowInput)
+            {
+                var methods = new[]
+                {
+                    AccessTools.Method(typeof(Input), nameof(Input.GetKeyDown), new[] { typeof(KeyCode) }),
+                    AccessTools.Method(typeof(Input), nameof(Input.GetKey), new[] { typeof(KeyCode) }),
+                    AccessTools.Method(typeof(Input), nameof(Input.GetMouseButtonDown), new[] { typeof(int) }),
+                    AccessTools.PropertyGetter(typeof(Input), nameof(Input.mousePosition)),
+                };
+                foreach (var method in methods)
+                {
+                    var info = Harmony.GetPatchInfo(method);
+                    ctx.Assert(info != null && info.Postfixes.Any(p => p.owner == Plugin.PluginGuid),
+                        "Input." + method.Name + " is not blocked");
+                }
+                ctx.Assert(Input.mousePosition.x < 0, "Input.mousePosition is not off-screen: " + Input.mousePosition);
+            }
+            if (!Plugin.Options.Sound)
+            {
+                ctx.Assert(MusicManager.GetSoundVolume() == 0f && MusicManager.GetBGMVolume() == 0f,
+                    "Game volume is not zero: sound=" + MusicManager.GetSoundVolume() + " music=" + MusicManager.GetBGMVolume());
+            }
+            yield break;
         }
 
         private static bool SafeCanTrigger(data_dialogues._dialogue d)

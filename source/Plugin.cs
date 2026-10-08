@@ -32,20 +32,51 @@ namespace InGameTests
             Instance = this;
             Log = Logger;
             Directory.CreateDirectory(Options.OutDir);
+            // Tells the host script the runner is alive (it gives up early without this).
+            File.WriteAllText(Path.Combine(Options.OutDir, "started.txt"), DateTime.Now.ToString("o"));
             LogCapture.Start();
-            LogCapture.LoadIgnoreFile(Path.Combine(Options.OutDir, "ignore.txt"));
-            UnityEngine.Application.runInBackground = true;
+            Logger.LogInfo("In-game test mode: suite=" + Options.Suite + (Options.Vanilla ? " (vanilla)" : "") + " out=" + Options.OutDir);
+
+            // Every step is guarded: the game ships a stripped Unity, so an API that compiles
+            // can still be missing at runtime. A failure is reported in results.json, and the
+            // runner then refuses to load the save, since the safety patches may be missing.
+            Try("ignore list", () => LogCapture.LoadIgnoreFile(Path.Combine(Options.OutDir, "ignore.txt")));
+            Try("run in background", () => UnityEngine.Application.runInBackground = true);
+
             var harmony = new Harmony(PluginGuid);
-            harmony.PatchAll(typeof(Plugin).Assembly);
+            foreach (Type type in AccessTools.GetTypesFromAssembly(typeof(Plugin).Assembly))
+            {
+                if (type.GetCustomAttributes(typeof(HarmonyPatch), false).Length > 0)
+                {
+                    Try("patch " + type.Name, () => harmony.CreateClassProcessor(type).Patch());
+                }
+            }
             if (Options.Vanilla)
             {
                 // Every mod reads as disabled for this session only; settings writes are blocked.
-                harmony.Patch(
+                Try("vanilla mode", () => harmony.Patch(
                     AccessTools.Method(typeof(staticVars._settings), nameof(staticVars._settings.IsModEnabled)),
-                    prefix: new HarmonyMethod(typeof(Vanilla_IsModEnabled), nameof(Vanilla_IsModEnabled.Prefix)));
+                    prefix: new HarmonyMethod(typeof(Vanilla_IsModEnabled), nameof(Vanilla_IsModEnabled.Prefix))));
             }
-            Logger.LogInfo("In-game test mode: suite=" + Options.Suite + (Options.Vanilla ? " (vanilla)" : "") + " out=" + Options.OutDir);
+
             StartCoroutine(Runner.Run());
+        }
+
+        /// <summary>Startup steps that failed; non-empty means the run must not load a save.</summary>
+        internal static readonly System.Collections.Generic.List<string> StartupErrors =
+            new System.Collections.Generic.List<string>();
+
+        private void Try(string step, Action action)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                StartupErrors.Add("Startup step '" + step + "' failed: " + ex);
+                Logger.LogError("Startup step '" + step + "' failed: " + ex.Message);
+            }
         }
     }
 
@@ -59,6 +90,8 @@ namespace InGameTests
         public float TimeScale = 20f;
         public float TimeoutSeconds = 600f;
         public bool Vanilla;
+        public bool AllowInput;
+        public bool Sound;
 
         /// <summary>Returns null when the game was not launched in test mode.</summary>
         public static TestOptions Parse(string[] args)
@@ -72,6 +105,12 @@ namespace InGameTests
                     case "-imtest":
                         options = options ?? new TestOptions();
                         options.Suite = next ?? "all";
+                        break;
+                    case "-imtest-allow-input":
+                        Ensure(ref options).AllowInput = true;
+                        break;
+                    case "-imtest-sound":
+                        Ensure(ref options).Sound = true;
                         break;
                     case "-imtest-vanilla":
                         Ensure(ref options).Vanilla = true;

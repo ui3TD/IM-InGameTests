@@ -52,11 +52,15 @@ The plugin stays installed, but **it does nothing unless the game is launched wi
 
 1. **Safety first.** In test mode the plugin blocks every save write (`SaveData`, `SaveGlobalData`, `SaveChapter`,
    `FixSaveFile`) and every Steam achievement and stat write. A test run never touches your saves or achievements.
-2. **Error capture.** Every Unity error and uncaught exception is recorded with its stack trace, starting from boot.
+2. **Hands off, sound off.** Keyboard and mouse input to the game is ignored, so a stray click or keypress
+   can't change a run. For example, Space pauses and Escape opens the menu. You can keep working while
+   it runs. The game is also muted through its own volume settings, and audio still plays at zero volume, so timing is
+   unchanged. Use `--allow-input` or `--sound` to turn either off.
+3. **Error capture.** Every Unity error and uncaught exception is recorded with its stack trace, starting from boot.
    BepInEx errors are recorded too, including Harmony's. Any error that isn't on the ignore list fails the test it happened in.
-3. **Load.** Once the main menu is up and mods have loaded, the plugin loads a copy of the fixture save.
-4. **Tests.** Every `[InGameTest]` method in the chosen suite runs, all in one game session.
-5. **Report.** `results.json` is written to `%USERPROFILE%\AppData\LocalLow\Glitch Pitch\Idol Manager\InGameTests\<run>\`
+4. **Load.** Once the main menu is up and mods have loaded, the plugin loads a copy of the fixture save.
+5. **Tests.** Every `[InGameTest]` method in the chosen suite runs, all in one game session.
+6. **Report.** `results.json` is written to `%USERPROFILE%\AppData\LocalLow\Glitch Pitch\Idol Manager\InGameTests\<run>\`
    along with the staged save. Then the game quits.
 
 While time is advancing, the runner acts the way a player would:
@@ -73,6 +77,7 @@ Random events differ from run to run, so a longer run covers more situations.
 | `smoke` | `EveryEnabledHarmonyModIsPatched` | Every enabled mod with a `HarmonyID` in its `info.json` has its `<HarmonyID>.dll` and at least one Harmony patch applied. |
 | `smoke` | `AdvanceWeeks` | N in-game weeks pass with no errors, and the date, `onNewDay` and `onNewWeek` counts add up. Fails within seconds if an exception kills the game clock. |
 | `selftest` | `DialogueClickThroughFinishesDialogue` | Starts a dialogue that has a choice and checks that the runner's click-through gets it to the end. |
+| `selftest` | `InputBlockedAndMuted` | The input block and mute are in place. |
 
 `AdvanceWeeks` also catches the most common way a broken mod shows up in play. An exception in a
 day or tick handler stops the game's `TimeProgress` coroutine, and the clock freezes for good.
@@ -101,6 +106,9 @@ private static IEnumerator ClockMovesWhenUnpaused(TestContext ctx)
 - `ctx.Note`, `ctx.Record`: add information to the report.
 - `ctx.Weeks`, `ctx.TimeScale`: the values passed on the command line.
 - Use `WaitForSecondsRealtime`, not `WaitForSeconds`, because `Time.timeScale` may be raised.
+- Drive the game by calling its methods, not through `UnityEngine.Input`, which is blocked during runs.
+- The game ships a stripped Unity, so a Unity API that compiles can still be missing at runtime
+  (`MissingMethodException`). For example, `AudioListener.volume` can't be set. Prefer APIs the game itself uses.
 - Run a suite with `--suite mymod`, or every suite with `--suite all`.
 
 ## Baseline runs (`--vanilla`)
@@ -140,6 +148,8 @@ Some errors don't come from the mod you're testing. Errors the unmodded game alw
 | `--timeout` | 300 | Seconds before the game is killed. |
 | `--game-dir` | from Steam | Idol Manager install folder. |
 | `--vanilla` | | Run with every mod disabled. |
+| `--allow-input` | | Let keyboard and mouse input reach the game. |
+| `--sound` | | Don't mute the game. |
 | `--no-build` | | Skip building the plugin. |
 | `-v` | | Full stack traces and per-mod patch counts. |
 
@@ -154,6 +164,8 @@ source/
   Plugin.cs              BepInEx entry point; inert unless -imtest
   Runner.cs              bootstrap (menu -> load save), test discovery, [InGameTest], TestContext
   SafetyPatches.cs       blocks saves and achievements in test mode
+  InputBlock.cs          ignores keyboard and mouse during runs
+  Mute.cs                zero game volume during runs
   LogCapture.cs          Unity + BepInEx error capture, ignore list
   ResultsWriter.cs       results.json
   Tests/SmokeTests.cs    smoke suite and the player stand-ins (popups, dialogue clicks)
