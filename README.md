@@ -72,6 +72,10 @@ private static IEnumerator ClockMovesWhenUnpaused(TestContext ctx)
 ```
 
 - `ctx.Assert`/`ctx.Fail` fail the test; `ctx.Note`/`ctx.Record` add to the report.
+- `Game` has the runner's helpers:
+  - `Game.AdvanceDays(ctx, n)` runs the clock like the smoke suite does, clicking through dialogues and popups.
+    `Game.ClickDialogue`, `Game.Unstall` and `Game.DescribeClock` are the pieces it's built from.
+  - `Game.WaitFor(ctx, condition, seconds, what)` waits or fails.
 - Use `WaitForSecondsRealtime`: `Time.timeScale` may be raised.
 - Call game methods; `UnityEngine.Input` is blocked during runs.
 - The game's Unity is stripped, so an API that compiles may be missing at runtime. Prefer APIs the game uses.

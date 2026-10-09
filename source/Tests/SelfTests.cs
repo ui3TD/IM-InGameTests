@@ -12,7 +12,7 @@ namespace InGameTests.Tests
     /// </summary>
     internal static class SelfTests
     {
-        /// <summary>SmokeTests.ClickDialogue gets a dialogue with a choice to the end.</summary>
+        /// <summary>Game.ClickDialogue gets a dialogue with a choice to the end.</summary>
         [InGameTest(Suite = "selftest")]
         private static IEnumerator DialogueClickThroughFinishesDialogue(TestContext ctx)
         {
@@ -25,7 +25,7 @@ namespace InGameTests.Tests
                 && SafeCanTrigger(d)).Take(10).ToList();
             ctx.Record("candidates", candidates.Count);
 
-            ActiveDialogueController controller = Camera.main.GetComponent<mainScript>().Data.GetComponent<ActiveDialogueController>();
+            ActiveDialogueController controller = Game.Main.Data.GetComponent<ActiveDialogueController>();
             data_dialogues._dialogue dialogue = null;
             float start = Time.realtimeSinceStartup;
             foreach (data_dialogues._dialogue candidate in candidates)
@@ -59,7 +59,7 @@ namespace InGameTests.Tests
                     ctx.Fail("Dialogue " + dialogue.id + " still showing after " + clicks + " clicks");
                     yield break;
                 }
-                string choice = SmokeTests.ClickDialogue(controller);
+                string choice = Game.ClickDialogue(controller);
                 if (choice != null)
                 {
                     choices.Add(choice);
