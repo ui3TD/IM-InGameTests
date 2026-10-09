@@ -114,6 +114,9 @@ private static IEnumerator ClockMovesWhenUnpaused(TestContext ctx)
 - The game ships a stripped Unity, so a Unity API that compiles can still be missing at runtime
   (`MissingMethodException`). For example, `AudioListener.volume` can't be set. Prefer APIs the game itself uses.
 - Run a suite with `--suite mymod`, or every suite with `--suite all`.
+- Pass `--build path\to\InGameTests.MyMod.csproj` so each run rebuilds your assembly first. Give the project
+  a build target that copies its DLL to `<game>\BepInEx\plugins\InGameTests\`; the runner's own
+  `source/InGameTests.csproj` shows how. `GameDir` is passed to the build.
 
 ## Choosing mods (`--vanilla`, `--only`)
 
@@ -163,6 +166,7 @@ Some errors don't come from the mod you're testing. Errors the unmodded game alw
 | `--allow-input` | | Let keyboard and mouse input reach the game. |
 | `--sound` | | Don't mute the game. |
 | `--no-build` | | Skip building the plugin. |
+| `--build` | | Also build this project before launching, e.g. your own test assembly (repeatable). |
 | `-v` | | Full stack traces and per-mod patch counts. |
 
 ## Layout
