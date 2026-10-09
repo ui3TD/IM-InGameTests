@@ -16,6 +16,7 @@ python run_ingame_tests.py --scope "My Mod"  # every suite's tests for this mod,
   [PASS] HarmonyModTests.EveryPatchMethodIsApplied  (0.0s)
   [PASS] SmokeTests.AdvanceWeeks  (21.0s)
          newDayEvents = 28
+  [PASS] SaveLoadTests.QuicksaveQuickloadRoundTrip  (3.9s)
 PASSED
 ```
 
@@ -33,8 +34,11 @@ The game folder is found from your Steam libraries (or pass `--game-dir`).
 
 1. The script builds the plugin, copies it to `<game>\BepInEx\plugins\InGameTests\`, and launches
    the game with `-imtest`. Without that flag the plugin does nothing, so normal play is unaffected.
-2. The plugin blocks all save, settings and Steam achievement writes, ignores keyboard and mouse
-   input, and mutes the game (`--allow-input` and `--sound` turn the last two off).
+2. The plugin moves every save into the run folder (`saves\`), so autosaves, quicksaves and your
+   mod's save code run for real without touching your own saves. It blocks settings and Steam
+   achievement writes, ignores keyboard and mouse input, and mutes the game (`--allow-input` and
+   `--sound` turn the last two off). After the run, the script checks that nothing in your save
+   folder (`...\Idol Manager\data\`) changed, and fails the run if anything did.
 3. It loads a copy of the test save, `fixtures/default.json` by default. [fixtures/README.md](fixtures/README.md)
    lists what's in it.
 4. It runs the chosen tests (see [Choosing what runs](#choosing-what-runs)) one after another in the
@@ -51,6 +55,7 @@ The game folder is found from your Steam libraries (or pass `--game-dir`).
 | `smoke` | `EveryPatchMethodIsApplied` | Every enabled Harmony mod's DLL is loaded with at least one patch applied, and every Prefix, Postfix, Transpiler or Finalizer it declares is applied under its HarmonyID. Harmony skips the patches in types that fail to load, and the loader only logs it. |
 | `smoke` | `EveryTranspilerChangesIL` | Each enabled mod's transpiler changes its method's IL. A transpiler whose IL search finds nothing usually returns the code untouched, and the mod then does nothing, with no error. |
 | `smoke` | `AdvanceWeeks` | N weeks pass with no errors. Fails fast if an exception stops the game clock, the usual way a broken mod shows in play. |
+| `smoke` | `QuicksaveQuickloadRoundTrip` | After those weeks, a quicksave (F5), quickload (F9) and second quicksave give the same save file, and a day then runs on the reloaded game. Fails with the save values that changed, such as a mod's data that isn't saved or a load hook that changes state. The few values the base game itself changes on a load are allowed, each only in the way the game changes it. |
 | `selftest` | `DialogueClickThroughFinishesDialogue` | The runner's dialogue clicking reaches the end of a dialogue. |
 | `selftest` | `InputBlockedAndMuted` | Input blocking and muting are in place. |
 
@@ -116,8 +121,8 @@ internal static class MyModTests
 
 | Kind | Helpers |
 |---|---|
-| Player action | `Game.AdvanceDays(ctx, n)` runs the clock, clicking through dialogues and popups (`Game.ClickDialogue`, `Game.Unstall`); it keeps a faster speed already running in the fast state. `Game.OpenProfile(girl, tab)`. `Game.CloseAllPopups(ctx)` also waits for closing popups to finish hiding, so the next one can open. `Game.OpenAudition(ctx, type)` holds a free audition and waits for its cards. `Game.NewElection()` starts an election with the new-election popup's choices; `Game.ClickThroughElection(ctx)` clicks through its results popup. |
-| Lookup | `Game.Main`, `Game.Girl(id)`, `Game.RoomOf(girl)`, `Game.ProfilePopup`, `Game.AuditionPopup`, `Game.TimeControl(state)` |
+| Player action | `Game.AdvanceDays(ctx, n)` runs the clock, clicking through dialogues and popups (`Game.ClickDialogue`, `Game.Unstall`); it keeps a faster speed already running in the fast state. `Game.OpenProfile(girl, tab)`. `Game.CloseAllPopups(ctx)` also waits for closing popups to finish hiding, so the next one can open. `Game.OpenAudition(ctx, type)` holds a free audition and waits for its cards. `Game.NewElection()` starts an election with the new-election popup's choices; `Game.ClickThroughElection(ctx)` clicks through its results popup. `Game.Quicksave(ctx)` saves as F5 does and waits for the file; `Game.Quickload(ctx)` loads it as F9 does, during play. |
+| Lookup | `Game.Main`, `Game.Girl(id)`, `Game.RoomOf(girl)`, `Game.ProfilePopup`, `Game.AuditionPopup`, `Game.TimeControl(state)`, `Game.Saves` (the save manager), `Game.QuicksaveFile` (in the run's `saves\` folder) |
 | Scoped setting | `Game.SelectPolicy(type, value)`, `Game.ClockSpeed(minutesPerSecond)`, `Game.Variable(name, value)` (a save variable, where mod settings live), `Game.Option(option, on)` (such as random events): undone on dispose |
 | Instrument | `TestTools.WaitFor(ctx, condition, seconds, what)` waits or fails. `TestTools.Spy(method, prefix, postfix)` patches a method ahead of every other patch until disposed, so a prefix sees the caller's arguments and a postfix sees the game's own result. `TestTools.Restore(action)` runs the action on dispose. |
 

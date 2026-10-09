@@ -8,9 +8,9 @@ namespace InGameTests
 {
     /// <summary>
     /// Dev-only in-game test runner. Inert unless the game is launched with
-    /// <c>-imtest &lt;suite&gt;</c>; then it blocks save/achievement writes, captures
-    /// every error, loads a fixture save, runs the [InGameTest] methods, writes
-    /// results.json and quits.
+    /// <c>-imtest &lt;suite&gt;</c>; then it moves saves into the run's folder, blocks
+    /// settings and achievement writes, captures every error, loads a fixture save,
+    /// runs the [InGameTest] methods, writes results.json and quits.
     /// </summary>
     [BepInPlugin(PluginGuid, "InGameTests", PluginInfo.PLUGIN_VERSION)]
     public class Plugin : BaseUnityPlugin

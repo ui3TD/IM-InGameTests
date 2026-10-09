@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using UnityEngine;
 
@@ -402,6 +403,85 @@ namespace InGameTests
             PopupManager popups = Main.Data.GetComponent<PopupManager>();
             yield return TestTools.WaitFor(ctx, () => popups.popups.All(p => !p.open && (p.obj == null || !p.obj.activeSelf)),
                 5f, "popups to close and finish hiding");
+        }
+
+        /// <summary>Lookup: the scene's save manager.</summary>
+        public static SaveManager Saves => Main.Data.GetComponent<SaveManager>();
+
+        /// <summary>
+        /// Lookup: the quicksave file F5 writes and F9 loads. In a test run it's in the run's own
+        /// save folder, never among the player's saves.
+        /// </summary>
+        public static string QuicksaveFile =>
+            Path.Combine(Path.Combine(Application.persistentDataPath, "data"), GetSaveFileName(Saves, false) + ".json");
+
+        private static readonly Func<SaveManager, bool, string> GetSaveFileName =
+            AccessTools.MethodDelegate<Func<SaveManager, bool, string>>(
+                AccessTools.Method(typeof(SaveManager), "GetSaveFileName", new[] { typeof(bool) }));
+
+        /// <summary>
+        /// Player action: quicksaves, as F5 does, and waits until the game's writer thread has
+        /// written <see cref="QuicksaveFile"/>. Fails if the file isn't written within 30 s.
+        /// </summary>
+        public static IEnumerator Quicksave(TestContext ctx)
+        {
+            string file = QuicksaveFile;
+            // The writer thread holds the file open while it writes, so a missing file, or one
+            // that can't be opened alone, isn't finished yet.
+            if (File.Exists(file))
+            {
+                File.Delete(file);
+            }
+            Saves.SaveData(autoSave: false);
+            yield return TestTools.WaitFor(ctx, () => IsWritten(file), 30f, "the quicksave to be written to " + file);
+        }
+
+        private static bool IsWritten(string file)
+        {
+            if (!File.Exists(file))
+            {
+                return false;
+            }
+            try
+            {
+                using (var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
+                {
+                    return stream.Length > 0;
+                }
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Player action: quickloads, as F9 does, during play and with no scene change, then waits
+        /// for the idol portraits and closes the popups the load leaves. Fails if nothing loads,
+        /// such as when there's no quicksave.
+        /// </summary>
+        public static IEnumerator Quickload(TestContext ctx)
+        {
+            bool loaded = false;
+            SaveManager.LoadDelegate onLoad = () => loaded = true;
+            SaveManager.LoadEvent += onLoad;
+            try
+            {
+                Saves.LoadData(autoSave: false);
+            }
+            finally
+            {
+                SaveManager.LoadEvent -= onLoad;
+            }
+            if (!loaded)
+            {
+                ctx.Fail("Quickload loaded nothing from " + QuicksaveFile);
+                yield break;
+            }
+            yield return TestTools.WaitFor(ctx, () => data_girls.ready && data_girls_textures.IsReady(), 60f, "the quickloaded save to be ready");
+            // Post-load popups and tweens, as after the fixture load.
+            yield return new WaitForSecondsRealtime(3f);
+            yield return CloseAllPopups(ctx);
         }
 
         /// <summary>Time state, speed, forced pause and open popup, for failure messages.</summary>

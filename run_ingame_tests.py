@@ -14,6 +14,7 @@ Exit code: 0 pass, 1 test failure, 2 no results (crash/timeout/setup).
 
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -27,6 +28,7 @@ HERE = Path(__file__).resolve().parent
 APP_ID = "821880"
 GAME_FOLDER = "Idol Manager"
 LOCALLOW = Path(os.environ["USERPROFILE"]) / "AppData" / "LocalLow" / "Glitch Pitch" / "Idol Manager"
+SAVE_DIR = LOCALLOW / "data"
 
 
 def find_game_dir() -> Path | None:
@@ -83,6 +85,27 @@ def stage_scope_list(out_dir: Path, rules: list[str], scope_lists: list[Path]) -
     else:
         parts = [p.read_text(encoding="utf-8") for p in (HERE / "scope.txt", HERE / "scope.local.txt") if p.is_file()]
     (out_dir / "scope.txt").write_text("\n".join(parts), encoding="utf-8")
+
+
+def snapshot(folder: Path) -> dict[str, str]:
+    """SHA-1 of every file under the folder, by relative path."""
+    if not folder.is_dir():
+        return {}
+    return {str(path.relative_to(folder)): hashlib.sha1(path.read_bytes()).hexdigest()
+            for path in folder.rglob("*") if path.is_file()}
+
+
+def report_save_changes(before: dict[str, str]) -> bool:
+    """Prints each file the run changed, added or removed among the player's saves; True if none."""
+    after = snapshot(SAVE_DIR)
+    changes = [f"changed {p}" for p in sorted(before) if p in after and after[p] != before[p]]
+    changes += [f"added {p}" for p in sorted(after) if p not in before]
+    changes += [f"removed {p}" for p in sorted(before) if p not in after]
+    if changes:
+        print(f"FAILED: the run touched your saves in {SAVE_DIR} (test saves belong in the run folder):")
+        for change in changes:
+            print("  " + change)
+    return not changes
 
 
 def print_summary(results: dict, verbose: bool) -> None:
@@ -147,7 +170,7 @@ def main() -> int:
     suite = args.suite or ("affected" if args.scope or args.scope_list else "smoke")
     if not args.save.is_file():
         print(f"Fixture save not found: {args.save}")
-        print("Copy a freeplay save there, e.g. from " + str(LOCALLOW / "data" / "auto_save.json"))
+        print("Copy a freeplay save there, e.g. from " + str(SAVE_DIR / "auto_save.json"))
         return 2
 
     if not args.skip_runner_build:
@@ -159,11 +182,7 @@ def main() -> int:
     shutil.copyfile(args.save, out_dir / "fixture.json")
     stage_ignore_list(out_dir)
     stage_scope_list(out_dir, args.scope, args.scope_list)
-    results_path = out_dir / "results.json"
 
-    # Launch IM.exe directly (not via steam -applaunch) so the script owns the process
-    # and can kill it. Steam must be running; these env vars tell Steamworks which app this is.
-    env = dict(os.environ, SteamAppId=APP_ID, SteamGameId=APP_ID)
     cmd = [str(game_dir / "IM.exe"),
            "-imtest", suite, "-imtest-run", run_id,
            "-imtest-weeks", str(args.weeks), "-imtest-timescale", str(args.timescale)]
@@ -176,6 +195,21 @@ def main() -> int:
     if args.sound:
         cmd.append("-imtest-sound")
     print(f"Launching game (run {run_id}, suite {suite}) ...")
+
+    # The game saves into the run folder in test mode; this proves it left the player's saves alone.
+    saves_before = snapshot(SAVE_DIR)
+    code = launch_and_wait(cmd, game_dir, out_dir, args.timeout, args.verbose)
+    if not report_save_changes(saves_before):
+        return code or 1
+    return code
+
+
+def launch_and_wait(cmd: list[str], game_dir: Path, out_dir: Path, timeout: float, verbose: bool) -> int:
+    """Runs the game until it writes results.json, prints the summary and returns the exit code."""
+    results_path = out_dir / "results.json"
+    # Launch IM.exe directly (not via steam -applaunch) so the script owns the process
+    # and can kill it. Steam must be running; these env vars tell Steamworks which app this is.
+    env = dict(os.environ, SteamAppId=APP_ID, SteamGameId=APP_ID)
     start = time.monotonic()
     proc = subprocess.Popen(cmd, cwd=str(game_dir), env=env)
 
@@ -194,8 +228,8 @@ def main() -> int:
                 print(f"Game exited (code {proc.returncode}) after {time.monotonic() - start:.0f}s without results.")
                 print(f"See {game_dir / 'BepInEx' / 'LogOutput.log'} and {LOCALLOW / 'Player.log'}")
                 return 2
-        if time.monotonic() - start > args.timeout:
-            print(f"Timed out after {args.timeout:.0f}s; killing the game.")
+        if time.monotonic() - start > timeout:
+            print(f"Timed out after {timeout:.0f}s; killing the game.")
             subprocess.run(["taskkill", "/IM", "IM.exe", "/F"], capture_output=True)
             return 2
         time.sleep(1)
@@ -208,7 +242,7 @@ def main() -> int:
         subprocess.run(["taskkill", "/IM", "IM.exe", "/F"], capture_output=True)
 
     print(f"Results after {elapsed:.0f}s: {results_path}")
-    print_summary(results, args.verbose)
+    print_summary(results, verbose)
     return 0 if results["passed"] else 1
 
 

@@ -134,7 +134,7 @@ namespace InGameTests
             {
                 result.Passed = false;
                 result.Failures.AddRange(Plugin.StartupErrors);
-                result.Failures.Add("Not loading the save: save and achievement blocking may not be in place.");
+                result.Failures.Add("Not loading the save: save redirection and achievement blocking may not be in place.");
                 yield break;
             }
 
