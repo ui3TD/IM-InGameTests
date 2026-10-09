@@ -96,7 +96,8 @@ namespace InGameTests
 
             if (bootstrap.Passed || saveLoaded)
             {
-                foreach (MethodInfo test in DiscoverTests())
+                LoadTestAssemblies(bootstrap);
+                foreach (MethodInfo test in DiscoverTests(bootstrap))
                 {
                     yield return RunTest(test);
                 }
@@ -250,12 +251,39 @@ namespace InGameTests
             }
         }
 
-        private static IEnumerable<MethodInfo> DiscoverTests()
+        /// <summary>
+        /// BepInEx only loads assemblies that contain a plugin, so test assemblies placed
+        /// next to this one (InGameTests.*.dll) are loaded here. Failures are reported
+        /// under bootstrap.
+        /// </summary>
+        private static void LoadTestAssemblies(TestResult result)
+        {
+            string dir = Path.GetDirectoryName(typeof(Runner).Assembly.Location);
+            foreach (string path in Directory.GetFiles(dir, "InGameTests.*.dll"))
+            {
+                string name = Path.GetFileNameWithoutExtension(path);
+                if (AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name == name))
+                {
+                    continue;
+                }
+                try
+                {
+                    Assembly.LoadFrom(path);
+                }
+                catch (Exception ex)
+                {
+                    result.Passed = false;
+                    result.Failures.Add("Could not load test assembly " + Path.GetFileName(path) + ": " + ex);
+                }
+            }
+        }
+
+        private static IEnumerable<MethodInfo> DiscoverTests(TestResult result)
         {
             string suite = Plugin.Options.Suite;
             return AppDomain.CurrentDomain.GetAssemblies()
                 .Where(a => a.GetName().Name.StartsWith("InGameTests", StringComparison.Ordinal))
-                .SelectMany(SafeTypes)
+                .SelectMany(a => SafeTypes(a, result))
                 .SelectMany(t => t.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
                 .Select(m => new { m, a = m.GetCustomAttributes(typeof(InGameTestAttribute), false).Cast<InGameTestAttribute>().FirstOrDefault() })
                 .Where(x => x.a != null && (suite == "all" || x.a.Suite == suite))
@@ -264,7 +292,7 @@ namespace InGameTests
                 .ToList();
         }
 
-        private static IEnumerable<Type> SafeTypes(Assembly a)
+        private static IEnumerable<Type> SafeTypes(Assembly a, TestResult result)
         {
             try
             {
@@ -272,6 +300,12 @@ namespace InGameTests
             }
             catch (ReflectionTypeLoadException ex)
             {
+                // Tests in the types that failed to load would otherwise be skipped silently.
+                result.Passed = false;
+                foreach (string message in ex.LoaderExceptions.Where(e => e != null).Select(e => e.Message).Distinct())
+                {
+                    result.Failures.Add("Types in " + a.GetName().Name + " failed to load: " + message);
+                }
                 return ex.Types.Where(t => t != null);
             }
         }

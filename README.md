@@ -88,7 +88,8 @@ day or tick handler stops the game's `TimeProgress` coroutine, and the clock fre
 ## Writing tests
 
 Add a static coroutine anywhere in the plugin, or in your own assembly named `InGameTests.*`
-placed in the same plugins folder:
+placed in the same plugins folder. The runner loads those assemblies itself in test mode, so they
+don't need a BepInEx plugin class, and they stay unloaded in normal play:
 
 ```csharp
 [InGameTest(Suite = "mymod", Order = 0)]
