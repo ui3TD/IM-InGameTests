@@ -12,7 +12,7 @@ namespace InGameTests
     /// The rules come from the run's scope.txt, staged by the host script from scope.txt,
     /// scope.local.txt and any --scope-file. With no rules, every mod is in scope.
     /// </summary>
-    public static class ModScope
+    internal static class ModScope
     {
         private static readonly List<Regex> Rules = new List<Regex>();
 

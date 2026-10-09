@@ -7,7 +7,7 @@ using System.Reflection;
 namespace InGameTests
 {
     /// <summary>An enabled mod whose info.json names a HarmonyID, and its loaded patch assembly.</summary>
-    public sealed class HarmonyMod
+    internal sealed class HarmonyMod
     {
         public string Title;
         public string HarmonyId;

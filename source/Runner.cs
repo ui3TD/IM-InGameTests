@@ -20,7 +20,7 @@ namespace InGameTests
         public int Order;
     }
 
-    public sealed class TestResult
+    internal sealed class TestResult
     {
         public string Name;
         public bool Passed = true;

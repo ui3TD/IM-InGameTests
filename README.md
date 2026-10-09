@@ -73,22 +73,39 @@ private static IEnumerator ClockMovesWhenUnpaused(TestContext ctx)
 ```
 
 - `ctx.Assert`/`ctx.Fail` fail the test; `ctx.Note`/`ctx.Record` add to the report.
-- `Game` has the runner's helpers:
-  - `Game.AdvanceDays(ctx, n)` runs the clock like the smoke suite does, clicking through dialogues and popups.
-    `Game.ClickDialogue`, `Game.Unstall` and `Game.DescribeClock` are the pieces it's built from.
-  - `Game.WaitFor(ctx, condition, seconds, what)` waits or fails.
-  - `Game.Girl(id)`, `Game.OpenProfile(girl, tab)` and `Game.CloseAllPopups(ctx)` reach the fixture's idols and screens.
-  - `Game.SelectPolicy` and `Game.ClockSpeed` change game state until disposed.
-  - `Game.TrainingTickAddParams(room)` runs one real training tick and returns the stamina and stat changes it asks for, without applying them.
-- `TestTools.Spy(method, prefix, postfix)` patches a method ahead of every other patch until disposed, so a
-  prefix sees the caller's arguments and a postfix sees the game's own result. `TestTools.Restore(action)`
-  runs the action on dispose.
-- `HarmonyMod.Enabled()` lists the enabled Harmony mods with their loaded assemblies.
 - Use `WaitForSecondsRealtime`: `Time.timeScale` may be raised.
 - Call game methods; `UnityEngine.Input` is blocked during runs.
 - The game's Unity is stripped, so an API that compiles may be missing at runtime. Prefer APIs the game uses.
 - Build your own assembly before each run; the runner tests whatever is deployed. `source/InGameTests.csproj`
   shows a build target that deploys.
+
+### Helpers
+
+| Kind | Helpers |
+|---|---|
+| Player action | `Game.AdvanceDays(ctx, n)` runs the clock, clicking through dialogues and popups (`Game.ClickDialogue`, `Game.Unstall`). `Game.OpenProfile(girl, tab)`, `Game.CloseAllPopups(ctx)`. |
+| Lookup | `Game.Main`, `Game.Girl(id)`, `Game.RoomOf(girl)`, `Game.ProfilePopup` |
+| Scoped setting | `Game.SelectPolicy(type, value)`, `Game.ClockSpeed(minutesPerSecond)`: undone on dispose |
+| Instrument | `TestTools.WaitFor(ctx, condition, seconds, what)` waits or fails. `TestTools.Spy(method, prefix, postfix)` patches a method ahead of every other patch until disposed, so a prefix sees the caller's arguments and a postfix sees the game's own result. `TestTools.Restore(action)` runs the action on dispose. |
+
+### Adding a helper to the runner
+
+A helper belongs in the runner only if it's exactly one of these kinds:
+
+| Kind | Definition | Check |
+|---|---|---|
+| Player action | Does what one UI control does | Calls the same game method that control's handler calls |
+| Lookup | Returns a game object by the game's own key | Takes a game key (an ID or a type), throws a clear error if it's missing, and changes nothing |
+| Scoped setting | Changes one game value for the length of a check | Returns an `IDisposable` that puts the old value back |
+| Instrument | Waits on, observes or wraps game code without changing what it computes | Takes its target as a parameter and names no specific game method |
+
+And it passes all of these:
+- It names only base-game, Unity and Harmony types: no mod types, no fixture IDs.
+- It checks no results: it fails a test only when it can't do its own job (a timeout, a stalled clock).
+- It doesn't copy a game formula. A copy belongs in the test that relies on it, where a mismatch shows as a failure.
+
+Anything else stays in the test project that uses it. Player actions, lookups and scoped settings go in
+`Game`, instruments in `TestTools`. Runner code that test projects don't call is `internal`.
 
 ## Saves, known errors and scope
 
