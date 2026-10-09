@@ -16,15 +16,16 @@ namespace InGameTests
             => Runner.WaitFor(condition, timeoutSeconds, what, ctx.Result);
 
         /// <summary>
-        /// Applies a temporary patch that runs before every other patch of its kind, so a prefix
-        /// sees the caller's arguments and a postfix sees the game's own result. Dispose removes it.
+        /// Applies a temporary patch that by default runs before every other patch of its kind, so a
+        /// prefix sees the caller's arguments and a postfix sees the game's own result. Pass
+        /// Priority.Last for a postfix that sees the result after every mod's postfix. Dispose removes it.
         /// </summary>
-        public static IDisposable Spy(MethodBase original, MethodInfo prefix = null, MethodInfo postfix = null)
+        public static IDisposable Spy(MethodBase original, MethodInfo prefix = null, MethodInfo postfix = null, int priority = Priority.First)
         {
             var harmony = new Harmony("im.ingametests.spy");
             harmony.Patch(original,
-                prefix: prefix == null ? null : new HarmonyMethod(prefix) { priority = Priority.First },
-                postfix: postfix == null ? null : new HarmonyMethod(postfix) { priority = Priority.First });
+                prefix: prefix == null ? null : new HarmonyMethod(prefix) { priority = priority },
+                postfix: postfix == null ? null : new HarmonyMethod(postfix) { priority = priority });
             return new Disposer(() => harmony.Unpatch(original, HarmonyPatchType.All, harmony.Id));
         }
 
