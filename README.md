@@ -116,9 +116,9 @@ internal static class MyModTests
 
 | Kind | Helpers |
 |---|---|
-| Player action | `Game.AdvanceDays(ctx, n)` runs the clock, clicking through dialogues and popups (`Game.ClickDialogue`, `Game.Unstall`). `Game.OpenProfile(girl, tab)`, `Game.CloseAllPopups(ctx)`. |
-| Lookup | `Game.Main`, `Game.Girl(id)`, `Game.RoomOf(girl)`, `Game.ProfilePopup` |
-| Scoped setting | `Game.SelectPolicy(type, value)`, `Game.ClockSpeed(minutesPerSecond)`: undone on dispose |
+| Player action | `Game.AdvanceDays(ctx, n)` runs the clock, clicking through dialogues and popups (`Game.ClickDialogue`, `Game.Unstall`); it keeps a faster speed already running in the fast state. `Game.OpenProfile(girl, tab)`. `Game.CloseAllPopups(ctx)` also waits for closing popups to finish hiding, so the next one can open. `Game.OpenAudition(ctx, type)` holds a free audition and waits for its cards. `Game.NewElection()` starts an election with the new-election popup's choices; `Game.ClickThroughElection(ctx)` clicks through its results popup. |
+| Lookup | `Game.Main`, `Game.Girl(id)`, `Game.RoomOf(girl)`, `Game.ProfilePopup`, `Game.AuditionPopup`, `Game.TimeControl(state)` |
+| Scoped setting | `Game.SelectPolicy(type, value)`, `Game.ClockSpeed(minutesPerSecond)`, `Game.Variable(name, value)` (a save variable, where mod settings live), `Game.Option(option, on)` (such as random events): undone on dispose |
 | Instrument | `TestTools.WaitFor(ctx, condition, seconds, what)` waits or fails. `TestTools.Spy(method, prefix, postfix)` patches a method ahead of every other patch until disposed, so a prefix sees the caller's arguments and a postfix sees the game's own result. `TestTools.Restore(action)` runs the action on dispose. |
 
 ### Adding a helper to the runner

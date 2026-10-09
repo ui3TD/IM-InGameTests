@@ -23,9 +23,10 @@ namespace InGameTests
 
         /// <summary>
         /// Player action: runs the clock forward the given number of days at ctx.TimeScale, clicking
-        /// through dialogues and closing whatever pauses the clock, as a player would. Records the
-        /// dates, dialogue clicks and interventions. Fails only if it can't get there: the clock
-        /// stalls, or a dialogue never ends.
+        /// through dialogues and closing whatever pauses the clock, as a player would. It selects the
+        /// fast speed unless the clock is already in the fast state, so a faster speed a test or a mod
+        /// set there is kept. Records the dates, dialogue clicks and interventions. Fails only if it
+        /// can't get there: the clock stalls, or a dialogue never ends.
         /// </summary>
         public static IEnumerator AdvanceDays(TestContext ctx, int days)
         {
@@ -44,7 +45,10 @@ namespace InGameTests
 
             try
             {
-                main.Time_SetState(mainScript._time_state.fast);
+                if (staticVars.timeState != mainScript._time_state.fast)
+                {
+                    main.Time_SetState(mainScript._time_state.fast);
+                }
                 Time.timeScale = ctx.TimeScale;
 
                 while (staticVars.dateTime < target)
@@ -216,6 +220,146 @@ namespace InGameTests
             return TestTools.Restore(() => staticVars.dateTimeAddMinutesPerSecond = before);
         }
 
+        /// <summary>Scoped setting: a save variable (what mod settings are stored in); Dispose restores it, or deletes it if it was unset.</summary>
+        public static IDisposable Variable(string name, string value)
+        {
+            string before = variables.Get(name);
+            variables.Set(name, value);
+            return TestTools.Restore(() =>
+            {
+                if (before == null)
+                {
+                    variables.Delete(name);
+                }
+                else
+                {
+                    variables.Set(name, before);
+                }
+            });
+        }
+
+        /// <summary>Scoped setting: a game option such as random events; Dispose restores it.</summary>
+        public static IDisposable Option(staticVars._playerData._options option, bool on)
+        {
+            staticVars._playerData._option setting = staticVars.PlayerData.GetOption(option);
+            bool before = setting.Val;
+            setting.Val = on;
+            return TestTools.Restore(() => setting.Val = before);
+        }
+
+        /// <summary>Lookup: the time control button of this speed; throws if the scene has none.</summary>
+        public static TimeControlButton TimeControl(mainScript._time_state state)
+        {
+            TimeControlButton button = UnityEngine.Object.FindObjectsOfType<TimeControlButton>().FirstOrDefault(b => b.Type == state);
+            if (button == null)
+            {
+                throw new InvalidOperationException("The scene has no time control button for " + state);
+            }
+            return button;
+        }
+
+        /// <summary>Lookup: the audition popup.</summary>
+        public static Popup_Audition AuditionPopup =>
+            Main.Data.GetComponent<PopupManager>().GetByType(PopupManager._type.audition).obj.GetComponent<Popup_Audition>();
+
+        /// <summary>
+        /// Player action: holds an audition of this type without paying, as the game's free audition
+        /// does (GenerateAudition), and waits until the popup has a card for every candidate. Regional
+        /// and nationwide auditions set their cooldown dates, as in play. Fails if no cards appear.
+        /// </summary>
+        public static IEnumerator OpenAudition(TestContext ctx, Auditions.type type)
+        {
+            Auditions auditions = Main.Data.GetComponent<Auditions>();
+            Auditions.data data = auditions.Get(type);
+            var earlier = new HashSet<data_girls.girls>(data.Girls.Select(g => g.girl));
+            auditions.GenerateAudition(data, ShouldPay: false);
+            yield return TestTools.WaitFor(ctx,
+                () => data.Girls.Count > 0 && data.Girls.All(g => !earlier.Contains(g.girl) && g.CardObject != null),
+                30f, "a card for every " + type + " audition candidate");
+        }
+
+        /// <summary>
+        /// Player action: starts a new election, as the Elections tab's Continue and then the
+        /// new-election popup's Continue do, keeping the popup's own choices: the current concert,
+        /// the first unreleased single and the cheapest broadcast. Throws if that Continue would be
+        /// disabled. The popup then closes on its own.
+        /// </summary>
+        public static SEvent_SSK._SSK NewElection()
+        {
+            Main.Data.GetComponent<SEvent_SSK>().NewSSK();
+            SSK_New_Popup popup = Main.Data.GetComponent<PopupManager>().GetByType(PopupManager._type.sevent_SSK_new).obj.GetComponent<SSK_New_Popup>();
+            SEvent_SSK._SSK election = popup.SSK;
+            if (election.Single == null || election.Concert == null)
+            {
+                popup.OnCancel();
+                throw new InvalidOperationException("The new-election popup can't continue: it needs "
+                    + (election.Single == null ? "an unreleased single" : "a concert that isn't finished"));
+            }
+            popup.OnContinue();
+            return election;
+        }
+
+        /// <summary>
+        /// Player action: clicks through the election results popup at ctx.TimeScale: the next
+        /// place's Continue while it's shown, and the big button once the last reveal and the idol's
+        /// reaction are over, until the popup closes after first place. Fails if the popup doesn't
+        /// open, or nothing moves for 20 s.
+        /// </summary>
+        public static IEnumerator ClickThroughElection(TestContext ctx)
+        {
+            yield return TestTools.WaitFor(ctx, () => PopupManager.GetOpenPopupType() == PopupManager._type.sevent_SSK,
+                30f, "the election results popup");
+            if (PopupManager.GetOpenPopupType() != PopupManager._type.sevent_SSK)
+            {
+                yield break;
+            }
+
+            SSK_Popup popup = Main.Data.GetComponent<PopupManager>().GetByType(PopupManager._type.sevent_SSK).obj.GetComponent<SSK_Popup>();
+            CanvasGroup nextPlace = popup.VN_Overlay.GetComponent<CanvasGroup>();
+            float lastClick = Time.realtimeSinceStartup;
+            float revealOver = -1f;
+            try
+            {
+                Time.timeScale = ctx.TimeScale;
+                while (PopupManager.GetOpenPopupType() == PopupManager._type.sevent_SSK)
+                {
+                    if (nextPlace.interactable)
+                    {
+                        popup.OnContinue();
+                        lastClick = Time.realtimeSinceStartup;
+                        revealOver = -1f;
+                    }
+                    else if (popup.BigButton.activeSelf && !ContinueBlocked(popup))
+                    {
+                        // The idol's reaction ends about a second after the reveal unblocks the button.
+                        if (revealOver < 0f)
+                        {
+                            revealOver = Time.time + 2f;
+                        }
+                        else if (Time.time >= revealOver)
+                        {
+                            popup.OnBigButton();
+                            lastClick = Time.realtimeSinceStartup;
+                            revealOver = -1f;
+                        }
+                    }
+                    if (Time.realtimeSinceStartup - lastClick > 20f)
+                    {
+                        ctx.Fail("The election results popup stopped at place " + popup.NextPlace + " for 20 s");
+                        yield break;
+                    }
+                    yield return null;
+                }
+            }
+            finally
+            {
+                Time.timeScale = 1f;
+            }
+        }
+
+        private static readonly AccessTools.FieldRef<SSK_Popup, bool> ContinueBlocked =
+            AccessTools.FieldRefAccess<SSK_Popup, bool>("ContinueBlocked");
+
         /// <summary>Lookup: the agency room the idol is in; throws if she's in none.</summary>
         public static agency._room RoomOf(data_girls.girls girl)
         {
@@ -243,7 +387,11 @@ namespace InGameTests
             yield return null;
         }
 
-        /// <summary>Player action: closes every open popup, as their close buttons would, and waits until none is open.</summary>
+        /// <summary>
+        /// Player action: closes every open popup, as their close buttons would, and waits until none
+        /// is open and each has finished hiding. A popup reopened while it still hides is switched off
+        /// when the hide ends, so wait here before opening the next one.
+        /// </summary>
         public static IEnumerator CloseAllPopups(TestContext ctx)
         {
             for (int i = 0; i < 10 && PopupManager.IsThereAnOpenPopup_(); i++)
@@ -251,7 +399,9 @@ namespace InGameTests
                 PopupManager.Close_();
                 yield return new WaitForSecondsRealtime(0.1f);
             }
-            yield return TestTools.WaitFor(ctx, () => !PopupManager.IsThereAnOpenPopup_(), 5f, "popups to close");
+            PopupManager popups = Main.Data.GetComponent<PopupManager>();
+            yield return TestTools.WaitFor(ctx, () => popups.popups.All(p => !p.open && (p.obj == null || !p.obj.activeSelf)),
+                5f, "popups to close and finish hiding");
         }
 
         /// <summary>Time state, speed, forced pause and open popup, for failure messages.</summary>
