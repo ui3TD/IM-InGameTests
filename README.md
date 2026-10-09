@@ -47,6 +47,8 @@ The game folder is found from your Steam libraries (or pass `--game-dir`).
 | Suite | Test | Checks |
 |---|---|---|
 | `smoke` | `EveryEnabledHarmonyModIsPatched` | Every enabled Harmony mod has its DLL and at least one patch applied. |
+| `smoke` | `EveryPatchMethodIsApplied` | Every Prefix, Postfix, Transpiler or Finalizer an enabled Harmony mod declares is applied under its HarmonyID. Harmony skips the patches in types that fail to load, and the loader only logs it. |
+| `smoke` | `EveryTranspilerChangesIL` | Each enabled mod's transpiler changes its method's IL. A transpiler whose IL search finds nothing usually returns the code untouched, and the mod then does nothing, with no error. |
 | `smoke` | `AdvanceWeeks` | N weeks pass with no errors. Fails fast if an exception stops the game clock, the usual way a broken mod shows in play. |
 | `selftest` | `DialogueClickThroughFinishesDialogue` | The runner's dialogue clicking reaches the end of a dialogue. |
 | `selftest` | `InputBlockedAndMuted` | Input blocking and muting are in place. |
@@ -82,6 +84,7 @@ private static IEnumerator ClockMovesWhenUnpaused(TestContext ctx)
 - `TestTools.Spy(method, prefix, postfix)` patches a method ahead of every other patch until disposed, so a
   prefix sees the caller's arguments and a postfix sees the game's own result. `TestTools.Restore(action)`
   runs the action on dispose.
+- `HarmonyMod.Enabled()` lists the enabled Harmony mods with their loaded assemblies.
 - Use `WaitForSecondsRealtime`: `Time.timeScale` may be raised.
 - Call game methods; `UnityEngine.Input` is blocked during runs.
 - The game's Unity is stripped, so an API that compiles may be missing at runtime. Prefer APIs the game uses.
