@@ -78,8 +78,8 @@ namespace InGameTests
 
     internal static class Runner
     {
-        private const string MainMenuScene = "Main Menu";
-        private const string GameScene = "main";
+        internal const string MainMenuScene = "Main Menu";
+        internal const string GameScene = "main";
 
         private static readonly List<TestResult> Results = new List<TestResult>();
         private static bool saveLoaded;
@@ -139,12 +139,7 @@ namespace InGameTests
             }
 
             LogCapture.Phase = "main-menu";
-            yield return WaitFor(
-                () => Mods_StopSpinner_Signal.ModsLoaded
-                      && SceneManager.GetActiveScene().name == MainMenuScene
-                      && UnityEngine.Object.FindObjectOfType<MainMenu_LoadGameManager>() != null
-                      && Camera.main != null && Camera.main.GetComponent<mainScript>() != null,
-                180f, "main menu with mods loaded", result);
+            yield return WaitFor(() => Mods_StopSpinner_Signal.ModsLoaded && AtMainMenu(), 180f, "main menu with mods loaded", result);
             if (!result.Passed)
             {
                 yield break;
@@ -192,19 +187,14 @@ namespace InGameTests
 
             LogCapture.Phase = "load";
             SaveManager.LoadEvent += OnLoad;
-            Popup_Load_Story.Story_Mode = false;
-            UnityEngine.Object.FindObjectOfType<MainMenu_LoadGameManager>().LoadGame(copy);
-
-            yield return WaitFor(
-                () => saveLoaded
-                      && SceneManager.GetActiveScene().name == GameScene
-                      && data_girls_textures.IsReady()
-                      && Camera.main != null && Camera.main.GetComponent<mainScript>() != null,
-                180f, "fixture save loaded into scene 'main'", result);
-            SaveManager.LoadEvent -= OnLoad;
-
-            // Post-load popups and tweens.
-            yield return new WaitForSecondsRealtime(3f);
+            try
+            {
+                yield return LoadFromMenu(copy, result);
+            }
+            finally
+            {
+                SaveManager.LoadEvent -= OnLoad;
+            }
             result.Data["loadedDate"] = staticVars.dateTime.ToString("yyyy-MM-dd HH:mm");
             result.Data["mods"] = Plugin.Options.LoadVanilla ? "all disabled (--load-vanilla)"
                 : Plugin.Options.Load.Count > 0 ? "only " + string.Join(", ", Plugin.Options.Load.ToArray()) + " (--load)"
@@ -212,6 +202,39 @@ namespace InGameTests
         }
 
         private static void OnLoad() => saveLoaded = true;
+
+        /// <summary>The main menu scene is up, with the object that loads a game from it.</summary>
+        internal static bool AtMainMenu() =>
+            SceneManager.GetActiveScene().name == MainMenuScene
+            && UnityEngine.Object.FindObjectOfType<MainMenu_LoadGameManager>() != null
+            && Camera.main != null && Camera.main.GetComponent<mainScript>() != null;
+
+        /// <summary>
+        /// From the main menu, loads a save as the Load popup's Load button does, waits for the game
+        /// scene and the idol portraits, then for post-load popups and tweens.
+        /// </summary>
+        internal static IEnumerator LoadFromMenu(string path, TestResult result)
+        {
+            bool loaded = false;
+            SaveManager.LoadDelegate onLoad = () => loaded = true;
+            SaveManager.LoadEvent += onLoad;
+            try
+            {
+                Popup_Load_Story.Story_Mode = false;
+                UnityEngine.Object.FindObjectOfType<MainMenu_LoadGameManager>().LoadGame(path);
+                yield return WaitFor(
+                    () => loaded
+                          && SceneManager.GetActiveScene().name == GameScene
+                          && data_girls_textures.IsReady()
+                          && Camera.main != null && Camera.main.GetComponent<mainScript>() != null,
+                    180f, "save " + Path.GetFileName(path) + " loaded into scene 'main'", result);
+            }
+            finally
+            {
+                SaveManager.LoadEvent -= onLoad;
+            }
+            yield return new WaitForSecondsRealtime(3f);
+        }
 
         private static IEnumerator RunTest(DiscoveredTest test)
         {

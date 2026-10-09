@@ -8,10 +8,10 @@ using System.Text.RegularExpressions;
 namespace InGameTests.Tests
 {
     /// <summary>
-    /// A quicksave, quickload and second quicksave give the same save file, apart from what the
-    /// base game itself changes on a load. A mod whose save and load don't mirror each other, or
-    /// whose load hook changes state, shows as a difference. A difference can't be traced to a
-    /// mod, so it counts whatever the scope.
+    /// A save, a load and a second save give the same save file, apart from what the base game
+    /// itself changes on a load. A mod whose save and load don't mirror each other, or whose load
+    /// hook changes state, shows as a difference. A difference can't be traced to a mod, so it
+    /// counts whatever the scope.
     /// </summary>
     [ModUnderTest(ModUnderTestAttribute.EveryMod)]
     internal static class SaveLoadTests
@@ -26,7 +26,6 @@ namespace InGameTests.Tests
         [InGameTest(Order = 2)]
         private static IEnumerator QuicksaveQuickloadRoundTrip(TestContext ctx)
         {
-            string file = Game.QuicksaveFile;
             string beforePath = Path.Combine(SaveSandbox.Dir, "roundtrip_before.json");
             string afterPath = Path.Combine(SaveSandbox.Dir, "roundtrip_after.json");
 
@@ -35,7 +34,7 @@ namespace InGameTests.Tests
             {
                 yield break;
             }
-            File.Copy(file, beforePath, overwrite: true);
+            File.Copy(Game.QuicksaveFile, beforePath, overwrite: true);
 
             yield return Game.Quickload(ctx);
             if (!ctx.Result.Passed)
@@ -49,18 +48,68 @@ namespace InGameTests.Tests
             {
                 yield break;
             }
-            File.Copy(file, afterPath, overwrite: true);
+            File.Copy(Game.QuicksaveFile, afterPath, overwrite: true);
 
+            CompareSaves(ctx, beforePath, afterPath, loadDate, sceneLoad: false, "quicksave, quickload and quicksave");
+            yield return RunADay(ctx, "the quickload");
+        }
+
+        /// <summary>
+        /// The same round trip through the main menu: quicksave, leave for the menu, load that file
+        /// from the menu and quicksave again. Unlike F9 this loads a new scene, so the game's objects
+        /// start fresh and only static state carries over. A mod that keeps a value in a static,
+        /// or doesn't set one up again when the scene loads, shows here and not in the quickload.
+        /// </summary>
+        [InGameTest(Suite = "menu", Order = 3)]
+        private static IEnumerator MainMenuRoundTrip(TestContext ctx)
+        {
+            string beforePath = Path.Combine(SaveSandbox.Dir, "menu_roundtrip_before.json");
+            string loadPath = Path.Combine(SaveSandbox.Dir, "menu_roundtrip_load.json");
+            string afterPath = Path.Combine(SaveSandbox.Dir, "menu_roundtrip_after.json");
+
+            yield return Game.Quicksave(ctx);
+            if (!ctx.Result.Passed)
+            {
+                yield break;
+            }
+            File.Copy(Game.QuicksaveFile, beforePath, overwrite: true);
+            // Load a copy: the game may rewrite the file it loaded from.
+            File.Copy(Game.QuicksaveFile, loadPath, overwrite: true);
+
+            yield return Game.ToMainMenu(ctx);
+            if (!ctx.Result.Passed)
+            {
+                yield break;
+            }
+            yield return Game.LoadFromMainMenu(ctx, loadPath);
+            if (!ctx.Result.Passed)
+            {
+                yield break;
+            }
+            string loadDate = ExtensionMethods.ToDataString(staticVars.dateTime);
+
+            yield return Game.Quicksave(ctx);
+            if (!ctx.Result.Passed)
+            {
+                yield break;
+            }
+            File.Copy(Game.QuicksaveFile, afterPath, overwrite: true);
+
+            CompareSaves(ctx, beforePath, afterPath, loadDate, sceneLoad: true, "quicksave, main menu, load and quicksave");
+            yield return RunADay(ctx, "the load from the main menu");
+        }
+
+        private static void CompareSaves(TestContext ctx, string beforePath, string afterPath, string loadDate, bool sceneLoad, string steps)
+        {
             JSONNode before = JSON.Parse(File.ReadAllText(beforePath));
             var differences = new List<Difference>();
             Compare(before, JSON.Parse(File.ReadAllText(afterPath)), "", differences);
-            int idols = before["data_girls__Girls"].Count;
-            int baseGame = differences.RemoveAll(d => IsBaseGameChange(d, loadDate, idols));
+            int baseGame = differences.RemoveAll(d => IsBaseGameChange(d, before, loadDate, sceneLoad));
             ctx.Record("saveBytes", new FileInfo(beforePath).Length);
             ctx.Record("baseGameChangesIgnored", baseGame);
             if (differences.Count > 0)
             {
-                ctx.Fail(differences.Count + " save values changed across quicksave, quickload and quicksave (files: "
+                ctx.Fail(differences.Count + " save values changed across " + steps + " (files: "
                     + beforePath + ", " + afterPath + "):\n"
                     + string.Join("\n", differences.Take(MaxDifferencesShown).Select(d => d.ToString()).ToArray())
                     + (differences.Count > MaxDifferencesShown ? "\n..." : ""));
@@ -69,7 +118,11 @@ namespace InGameTests.Tests
             {
                 ctx.Note("A difference can come from any loaded mod, including the ones outside the scope.");
             }
+        }
 
+        /// <summary>One day on the reloaded game, since one exception in a day handler stops the clock for good.</summary>
+        private static IEnumerator RunADay(TestContext ctx, string after)
+        {
             mainScript main = Game.Main;
             int newDays = 0;
             mainScript.newDay onDay = () => newDays++;
@@ -82,11 +135,14 @@ namespace InGameTests.Tests
             {
                 main.onNewDay -= onDay;
             }
-            ctx.Assert(newDays >= 1, "Expected an onNewDay event after the quickload, got " + newDays);
+            ctx.Assert(newDays >= 1, "Expected an onNewDay event after " + after + ", got " + newDays);
         }
 
-        /// <summary>What the base game changes between two saves around a load, with no mod loaded.</summary>
-        private static bool IsBaseGameChange(Difference d, string loadDate, int idols)
+        /// <summary>
+        /// What the base game changes between two saves around a load, with no mod loaded.
+        /// sceneLoad: the load came from the main menu, with a new game scene.
+        /// </summary>
+        private static bool IsBaseGameChange(Difference d, JSONNode before, string loadDate, bool sceneLoad)
         {
             switch (Regex.Replace(d.Path, @"\[\d+\]", "[]"))
             {
@@ -96,7 +152,19 @@ namespace InGameTests.Tests
                     return true;
                 // data_girls.LoadFunction makes each saved idol with GenerateGirl, which takes a new ID for her.
                 case "data_girls__LastGirlID":
-                    return long.TryParse(d.Before, out long a) && long.TryParse(d.After, out long b) && b - a == idols;
+                    return long.TryParse(d.Before, out long a) && long.TryParse(d.After, out long b)
+                           && b - a == before["data_girls__Girls"].Count;
+                // The agency's fans per group are a total that resources.RecalcFans works out again
+                // from the idols who haven't graduated, whenever the fan tooltip redraws. A load
+                // redraws it, so a total saved since the idols' fans last changed is brought up to date.
+                case "resources__Fans[].people":
+                    return d.After == RecalculatedFans(before, int.Parse(Regex.Match(d.Path, @"\[(\d+)\]").Groups[1].Value))
+                        .ToString(System.Globalization.CultureInfo.InvariantCulture);
+                // A load from the menu runs data_dialogues.LoadFunction before the new scene's
+                // data_dialogues.Start, which reads the dialogues in again and so forgets every
+                // date they were last triggered. F9 loads in place, with no Start.
+                case "data_dialogues__Data":
+                    return sceneLoad && d.After == "0 items";
                 // _concert.Initiate dates an unfinished concert's finish to the day it's loaded.
                 case "SEvent_Concert__Concerts[].FinishDate":
                     return d.After == loadDate;
@@ -106,6 +174,35 @@ namespace InGameTests.Tests
                 default:
                     return false;
             }
+        }
+
+        /// <summary>resources.RecalcFans for one fan group of a save: its people summed over the idols who haven't graduated.</summary>
+        private static long RecalculatedFans(JSONNode save, int index)
+        {
+            JSONNode group = save["resources__Fans"][index];
+            string graduated = ((int)data_girls._status.graduated).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            JSONNode idols = save["data_girls__Girls"];
+            long total = 0;
+            for (int i = 0; i < idols.Count; i++)
+            {
+                if (idols[i]["status"].Value == graduated)
+                {
+                    continue;
+                }
+                JSONNode fans = idols[i]["Fans"];
+                for (int j = 0; j < fans.Count; j++)
+                {
+                    // girls.GetFan: the idol's first fan entry of the group's gender, hardcoreness and age.
+                    if (fans[j]["gender"].Value == group["gender"].Value
+                        && fans[j]["hardcoreness"].Value == group["hardcoreness"].Value
+                        && fans[j]["age"].Value == group["age"].Value)
+                    {
+                        total += long.Parse(fans[j]["people"].Value, System.Globalization.CultureInfo.InvariantCulture);
+                        break;
+                    }
+                }
+            }
+            return total;
         }
 
         private struct Difference

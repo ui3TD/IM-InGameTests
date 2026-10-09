@@ -6,6 +6,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace InGameTests
 {
@@ -482,6 +483,72 @@ namespace InGameTests
             // Post-load popups and tweens, as after the fixture load.
             yield return new WaitForSecondsRealtime(3f);
             yield return CloseAllPopups(ctx);
+        }
+
+        /// <summary>
+        /// Player action: leaves for the main menu, as the Settings tab's Main Menu button does, so
+        /// the game autosaves first (into the run's save folder). The Steam game loads mods once, when
+        /// Steam starts, so the menu keeps the mods and patches it has. Fails if the menu isn't ready
+        /// within 60 s.
+        /// </summary>
+        public static IEnumerator ToMainMenu(TestContext ctx)
+        {
+            // The menu's load manager outlives the scene it loads and destroys itself 5 s later.
+            // Wait for that, so the helpers below find the new menu's one.
+            yield return TestTools.WaitFor(ctx, () => UnityEngine.Object.FindObjectOfType<MainMenu_LoadGameManager>() == null,
+                10f, "the last load's menu manager to go");
+            if (UnityEngine.Object.FindObjectOfType<MainMenu_LoadGameManager>() != null)
+            {
+                yield break;
+            }
+            Main.Data.GetComponent<Tabs_Manager>().CloseTab(force: true);
+            Saves.SaveData();
+            SceneManager.LoadScene(Runner.MainMenuScene);
+            yield return TestTools.WaitFor(ctx, Runner.AtMainMenu, 60f, "the main menu");
+            // As at boot: startup popups settle.
+            yield return new WaitForSecondsRealtime(2f);
+        }
+
+        /// <summary>
+        /// Player action: loads a save from the main menu, as the Load popup's Load button does, with
+        /// a full scene load (F9 loads in place). Then waits for the idol portraits and closes the
+        /// popups the load leaves. Needs the main menu (<see cref="ToMainMenu"/>). Fails if the save
+        /// isn't loaded within 180 s.
+        /// </summary>
+        public static IEnumerator LoadFromMainMenu(TestContext ctx, string path)
+        {
+            yield return Runner.LoadFromMenu(path, ctx.Result);
+            if (SceneManager.GetActiveScene().name == Runner.GameScene)
+            {
+                yield return CloseAllPopups(ctx);
+            }
+        }
+
+        /// <summary>
+        /// Player action: starts a free-play game, as the main menu's Free Play and New Game buttons,
+        /// the name fields and the difficulty popup's Start do: default options, normal difficulty.
+        /// Waits for the game scene and the idol portraits; the intro dialogue is left to the test.
+        /// Needs the main menu (<see cref="ToMainMenu"/>). Fails if the game isn't ready within 180 s.
+        /// </summary>
+        public static IEnumerator NewGame(TestContext ctx)
+        {
+            Main.Data.GetComponent<MainMenu_Buttons_Controller>().OnClick_FreePlay();
+            staticVars._playerData player = staticVars.PlayerData;
+            player.SetDefaults();
+            player.IsStoryMode = false;
+            player.SetGender(_IsMale: true);
+            player.SetFirstName("Test");
+            player.SetLastName("Runner");
+            player.SetGroupName("Test Group");
+            UnityEngine.Object.FindObjectOfType<MainMenu_LoadGameManager>().StartNewGame();
+            yield return TestTools.WaitFor(ctx,
+                () => SceneManager.GetActiveScene().name == Runner.GameScene
+                      && data_girls_textures.IsReady()
+                      && Camera.main != null && Camera.main.GetComponent<mainScript>() != null
+                      && !mainScript.IsMainMenu(),
+                180f, "the new game's scene");
+            // Post-load popups and tweens, as after a load.
+            yield return new WaitForSecondsRealtime(3f);
         }
 
         /// <summary>Time state, speed, forced pause and open popup, for failure messages.</summary>

@@ -152,6 +152,8 @@ def main() -> int:
                     help="use the runner plugin already in the game instead of rebuilding it")
     ap.add_argument("-v", "--verbose", action="store_true", help="full stack traces and per-mod patch counts")
     args = ap.parse_args()
+    # Piped output uses the ANSI code page, which can't print idol names in failure messages.
+    sys.stdout.reconfigure(errors="backslashreplace")
 
     game_dir = args.game_dir or find_game_dir()
     if game_dir is None or not (game_dir / "IM.exe").is_file():
