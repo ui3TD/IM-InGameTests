@@ -1,95 +1,60 @@
 # IM-InGameTests
 
-Automated tests that run **inside Idol Manager** with your mods loaded. No clicking needed.
-
-Unit tests outside the game can't cover everything: the Unity lifecycle, real game data and saves,
-how mods behave when they're all loaded together, or a game update breaking a mod at runtime.
-IM-InGameTests starts the real game, loads a save, runs tests as coroutines, writes the results
-to a file and quits. A typical smoke run takes about 40 seconds.
+Automated tests that run **inside Idol Manager** with your mods loaded, covering what unit tests
+can't: the Unity lifecycle, real game data, and all mods loaded together. One command starts the
+game, loads a save, runs the tests, writes the results and quits, in about 40 seconds.
 
 ```
 python run_ingame_tests.py                  # smoke suite: load the save, run 4 in-game weeks
-python run_ingame_tests.py --weeks 12       # longer run
-python run_ingame_tests.py --suite all -v   # every suite, full stack traces
-python run_ingame_tests.py --vanilla        # same tests with every mod disabled, as a baseline
-python run_ingame_tests.py --only "My Mod"  # only this mod enabled (repeat --only for more)
+python run_ingame_tests.py --vanilla        # same, with every mod disabled, as a baseline
+python run_ingame_tests.py --only "My Mod"  # only this mod enabled (repeatable)
 ```
 
 ```
   [PASS] bootstrap  (14.4s)
   [PASS] SmokeTests.EveryEnabledHarmonyModIsPatched  (0.0s)
   [PASS] SmokeTests.AdvanceWeeks  (21.0s)
-         note: Dialogue choice taken: Feel free to talk to me about any problems you have.
-         note: Auto-resumed clock 1x: closed popup (... popup=girl_birthday)
          newDayEvents = 28
-         newWeekEvents = 4
 PASSED
 ```
 
-The exit code is 0 when everything passes, 1 when a test fails, and 2 when no results came back (crash, timeout or setup problem).
-That makes it usable from scripts and pre-release checks.
+Exit code: 0 passed, 1 a test failed, 2 no results (crash, timeout or setup problem).
 
 ## Requirements
 
-- Windows, with Idol Manager installed through Steam. Steam must be running.
-- [BepInEx 5](https://github.com/BepInEx/BepInEx) installed in the game folder.
-- [.NET SDK](https://dotnet.microsoft.com/download) to build the plugin. It targets .NET Framework 4.6, and reference assemblies come from NuGet.
-- Python 3.10 or later.
+- Windows, Idol Manager from Steam, and Steam running.
+- [BepInEx 5](https://github.com/BepInEx/BepInEx) in the game folder.
+- [.NET SDK](https://dotnet.microsoft.com/download) and Python 3.10+.
 
-The game folder is found automatically from your Steam libraries. If that fails, pass `--game-dir`.
-The build compiles against the game's own DLLs in `IM_Data\Managed`.
+The game folder is found from your Steam libraries (or pass `--game-dir`).
 
-## Setup
+## How a run works
 
-Close the game, then run `python run_ingame_tests.py`. A mid-game test save comes included
-(`fixtures/default.json`). It has the game's common states ready to build on, from injured idols
-and a cafe to a world tour waiting to launch. [fixtures/README.md](fixtures/README.md) lists them
-with their IDs and explains how to use your own save instead.
-
-The script builds the plugin and copies it to `<game>\BepInEx\plugins\InGameTests\`. Next it launches
-`IM.exe -imtest <suite> ...` and waits for `results.json`. The game window opens and closes on its own.
-
-The plugin stays installed, but **it does nothing unless the game is launched with `-imtest`**, so normal play is unaffected.
-
-## What happens during a run
-
-1. **Safety first.** In test mode the plugin blocks every save write (`SaveData`, `SaveGlobalData`, `SaveChapter`,
-   `FixSaveFile`) and every Steam achievement and stat write. A test run never touches your saves or achievements.
-2. **Hands off, sound off.** Keyboard and mouse input to the game is ignored, so a stray click or keypress
-   can't change a run. For example, Space pauses and Escape opens the menu. You can keep working while
-   it runs. The game is also muted through its own volume settings, and audio still plays at zero volume, so timing is
-   unchanged. Use `--allow-input` or `--sound` to turn either off.
-3. **Error capture.** Every Unity error and uncaught exception is recorded with its stack trace, starting from boot.
-   BepInEx errors are recorded too, including Harmony's. Any error that isn't on the ignore list fails the test it happened in.
-4. **Load.** Once the main menu is up and mods have loaded, the plugin loads a copy of the fixture save.
-5. **Tests.** Every `[InGameTest]` method in the chosen suite runs, all in one game session.
-6. **Report.** `results.json` is written to `%USERPROFILE%\AppData\LocalLow\Glitch Pitch\Idol Manager\InGameTests\<run>\`
-   along with the staged save. Then the game quits.
-
-While time is advancing, the runner acts the way a player would:
-- closes popups,
-- clicks through dialogues, always taking the first choice,
-- raises `Time.timeScale` (default 20) so weeks pass in seconds.
-
-Random events differ from run to run, so a longer run covers more situations.
+1. The script builds the plugin, copies it to `<game>\BepInEx\plugins\InGameTests\`, and launches
+   the game with `-imtest`. Without that flag the plugin does nothing, so normal play is unaffected.
+2. The plugin blocks all save, settings and Steam achievement writes, ignores keyboard and mouse
+   input, and mutes the game (`--allow-input` and `--sound` turn the last two off).
+3. It loads a copy of the test save, `fixtures/default.json` by default. [fixtures/README.md](fixtures/README.md)
+   lists what's in it.
+4. It runs every `[InGameTest]` in the chosen suite, one after another in the same session. While
+   time advances it closes popups and takes the first choice in dialogues, like a player would.
+5. Any Unity, BepInEx or Harmony error that isn't on the ignore list fails the test it happened in.
+6. It writes `results.json` to `%USERPROFILE%\AppData\LocalLow\Glitch Pitch\Idol Manager\InGameTests\<run>\`
+   and quits, and the script prints the summary.
 
 ## Included tests
 
 | Suite | Test | Checks |
 |---|---|---|
-| `smoke` | `EveryEnabledHarmonyModIsPatched` | Every enabled mod with a `HarmonyID` in its `info.json` has its `<HarmonyID>.dll` and at least one Harmony patch applied. |
-| `smoke` | `AdvanceWeeks` | N in-game weeks pass with no errors, and the date, `onNewDay` and `onNewWeek` counts add up. Fails within seconds if an exception kills the game clock. |
-| `selftest` | `DialogueClickThroughFinishesDialogue` | Starts a dialogue that has a choice and checks that the runner's click-through gets it to the end. |
-| `selftest` | `InputBlockedAndMuted` | The input block and mute are in place. |
-
-`AdvanceWeeks` also catches the most common way a broken mod shows up in play. An exception in a
-day or tick handler stops the game's `TimeProgress` coroutine, and the clock freezes for good.
+| `smoke` | `EveryEnabledHarmonyModIsPatched` | Every enabled Harmony mod has its DLL and at least one patch applied. |
+| `smoke` | `AdvanceWeeks` | N weeks pass with no errors. Fails fast if an exception stops the game clock, the usual way a broken mod shows in play. |
+| `selftest` | `DialogueClickThroughFinishesDialogue` | The runner's dialogue clicking reaches the end of a dialogue. |
+| `selftest` | `InputBlockedAndMuted` | Input blocking and muting are in place. |
 
 ## Writing tests
 
-Add a static coroutine anywhere in the plugin, or in your own assembly named `InGameTests.*`
-placed in the same plugins folder. The runner loads those assemblies itself in test mode, so they
-don't need a BepInEx plugin class, and they stay unloaded in normal play:
+Put a static coroutine in the plugin, or in your own assembly named `InGameTests.*` deployed to the
+same plugins folder. The runner loads those in test mode; they don't need a BepInEx plugin class.
 
 ```csharp
 [InGameTest(Suite = "mymod", Order = 0)]
@@ -102,95 +67,42 @@ private static IEnumerator ClockMovesWhenUnpaused(TestContext ctx)
     main.Time_SetState(mainScript._time_state.pause);
 
     ctx.Assert(staticVars.dateTime > before, "the clock did not move");
-    ctx.Record("advancedBy", staticVars.dateTime - before);   // shown under the test in the report
+    ctx.Record("advancedBy", staticVars.dateTime - before);   // shown in the report
 }
 ```
 
-- `ctx.Assert`, `ctx.Fail`: mark the test failed with a message.
-- `ctx.Note`, `ctx.Record`: add information to the report.
-- `ctx.Weeks`, `ctx.TimeScale`: the values passed on the command line.
-- Use `WaitForSecondsRealtime`, not `WaitForSeconds`, because `Time.timeScale` may be raised.
-- Drive the game by calling its methods, not through `UnityEngine.Input`, which is blocked during runs.
-- The game ships a stripped Unity, so a Unity API that compiles can still be missing at runtime
-  (`MissingMethodException`). For example, `AudioListener.volume` can't be set. Prefer APIs the game itself uses.
-- Run a suite with `--suite mymod`, or every suite with `--suite all`.
-- Build your own assembly before each run, e.g. `dotnet build InGameTests.MyMod.csproj`. Give the project a
-  build target that copies its DLL to `<game>\BepInEx\plugins\InGameTests\`; the runner's own
-  `source/InGameTests.csproj` shows how. The runner tests whatever is deployed there.
+- `ctx.Assert`/`ctx.Fail` fail the test; `ctx.Note`/`ctx.Record` add to the report.
+- Use `WaitForSecondsRealtime`: `Time.timeScale` may be raised.
+- Call game methods; `UnityEngine.Input` is blocked during runs.
+- The game's Unity is stripped, so an API that compiles may be missing at runtime. Prefer APIs the game uses.
+- Build your own assembly before each run; the runner tests whatever is deployed. `source/InGameTests.csproj`
+  shows a build target that deploys.
 
-## Choosing mods (`--vanilla`, `--only`)
+## Saves and known errors
 
-By default a run uses the mods enabled in the game. Both options below apply to that run only. Your mod
-list isn't changed, because settings writes are blocked in test mode.
+- `tools/sanitize_save.py` makes a shareable fixture from your own save (renames, swaps modded portrait
+  parts, can drop mod variables). Check it with `tools/check_save.py` and one `--vanilla` run.
+- Errors that don't come from what you're testing can be ignored with one .NET regex per line, matched
+  against `message\nstack trace`: in `ignore.txt` (committed) or `ignore.local.txt` (your own setup).
 
-- `--vanilla` disables every mod. Use it to tell whether a failure comes from the game itself or from a
-  mod, and to check that a save works without any mods installed.
-- `--only MOD` enables just that mod, even if it's disabled in the game. Repeat it to test mods
-  together, e.g. a mod and its dependency. `MOD` can be the folder name, Workshop ID, title or
-  HarmonyID, ignoring case. A name that matches no installed mod fails the run, so a typo can't
-  silently test nothing. The report lists the mods that were enabled.
-
-## Sharing saves
-
-`tools/sanitize_save.py` turns a save into a fixture you can share. It:
-- replaces the player's name, group names and save timestamp,
-- swaps portrait parts from mods for base-game parts of the same body,
-- can drop idol variables written by mods (`--drop-girl-variable REGEX`),
-- prints anything that still looks like a file path or Workshop reference.
-
-Then check the result with `tools/check_save.py`, which finds broken references and other problems
-that crash or quietly break a load, and run it once with `--vanilla`.
-
-## Ignoring known errors
-
-Some errors don't come from the mod you're testing. Errors the unmodded game always logs are built in
-(`LogCapture.Ignored`). For anything else, add one .NET regex per line. Each pattern is matched against
-`message\nstack trace`.
-
-- `ignore.txt` is committed. Use it for patterns that apply to everyone.
-- `ignore.local.txt` isn't committed. Use it for errors from your own setup, such as a broken mod
-  you have installed from the Workshop.
-
-## Command-line options
+## Options
 
 | Option | Default | |
 |---|---|---|
-| `--suite` | `smoke` | Suite to run. `all` runs every suite. |
+| `--suite` | `smoke` | Suite to run; `all` runs every suite. |
 | `--save` | `fixtures/default.json` | Save to load. |
 | `--weeks` | 4 | In-game weeks to advance. |
 | `--timescale` | 20 | `Time.timeScale` while advancing. |
 | `--timeout` | 300 | Seconds before the game is killed. |
-| `--game-dir` | from Steam | Idol Manager install folder. |
-| `--vanilla` | | Run with every mod disabled. |
-| `--only` | | Enable only this mod (repeatable). |
-| `--allow-input` | | Let keyboard and mouse input reach the game. |
+| `--game-dir` | from Steam | Idol Manager folder. |
+| `--vanilla` | | Disable every mod for this run. |
+| `--only MOD` | | Enable only this mod (folder name, Workshop ID, title or HarmonyID); repeatable. |
+| `--allow-input` | | Let keyboard and mouse reach the game. |
 | `--sound` | | Don't mute the game. |
-| `--skip-runner-build` | | Use the runner plugin already in the game instead of rebuilding it. |
+| `--skip-runner-build` | | Use the plugin already in the game instead of rebuilding it. |
 | `-v` | | Full stack traces and per-mod patch counts. |
 
-## Layout
-
-```
-run_ingame_tests.py      host script: build, stage, launch, wait, report
-ignore.txt               shared error-ignore patterns
-fixtures/default.json    included test save (sanitized; other saves here are not committed)
-fixtures/README.md       what the included save contains, with IDs
-tools/sanitize_save.py   make a shareable fixture from your own save
-tools/check_save.py      check a save for broken references before using it
-tools/build_fixture.py   add the documented states to the included save
-tools/savefile.py        shared save reading and writing
-source/
-  Plugin.cs              BepInEx entry point; inert unless -imtest
-  Runner.cs              bootstrap (menu -> load save), test discovery, [InGameTest], TestContext
-  SafetyPatches.cs       blocks saves and achievements in test mode
-  ModFilter.cs           --vanilla / --only mod selection
-  InputBlock.cs          ignores keyboard and mouse during runs
-  Mute.cs                zero game volume during runs
-  LogCapture.cs          Unity + BepInEx error capture, ignore list
-  ResultsWriter.cs       results.json
-  Tests/SmokeTests.cs    smoke suite and the player stand-ins (popups, dialogue clicks)
-  Tests/SelfTests.cs     checks of the runner itself
-```
+`--vanilla` and `--only` affect that run only; your mod list isn't changed.
 
 ## License
 
