@@ -5,4 +5,6 @@ fixtures/*.json
 !fixtures/default.json
 # Errors specific to your own installed mods
 ignore.local.txt
+# Your own narrowing of which mods the per-mod checks judge
+scope.local.txt
 __pycache__/

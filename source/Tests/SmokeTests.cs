@@ -16,7 +16,7 @@ namespace InGameTests.Tests
     /// </summary>
     internal static class SmokeTests
     {
-        /// <summary>Every enabled Harmony mod has at least one patch applied by its HarmonyID.</summary>
+        /// <summary>Every enabled Harmony mod in scope has at least one patch applied by its HarmonyID.</summary>
         [InGameTest(Order = 0)]
         private static IEnumerator EveryEnabledHarmonyModIsPatched(TestContext ctx)
         {
@@ -47,6 +47,7 @@ namespace InGameTests.Tests
                 copies.Add(mod);
             }
 
+            var outOfScope = new List<string>();
             foreach (var pair in copiesById)
             {
                 string id = pair.Key;
@@ -54,6 +55,11 @@ namespace InGameTests.Tests
                 if (mod == null)
                 {
                     ctx.Note("Harmony mod not enabled, not tested: " + pair.Value[0].Title + " (" + id + ")");
+                    continue;
+                }
+                if (!ModScope.Includes(mod))
+                {
+                    outOfScope.Add(mod.Title);
                     continue;
                 }
 
@@ -67,6 +73,7 @@ namespace InGameTests.Tests
                 ctx.Record(id, count);
                 ctx.Assert(count > 0, mod.Title + " (" + id + ") is enabled but has no patches applied");
             }
+            ModScope.NoteSkipped(ctx, outOfScope);
 
             yield break;
         }

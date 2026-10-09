@@ -12,6 +12,9 @@ namespace InGameTests
         public string Title;
         public string HarmonyId;
 
+        /// <summary>The first enabled installed copy.</summary>
+        public Mods._mod Mod;
+
         /// <summary>The assembly whose methods are applied as patches under the HarmonyID, or else a loaded assembly of that name. Null when not loaded.</summary>
         public Assembly Assembly;
 
@@ -47,6 +50,7 @@ namespace InGameTests
                 {
                     Title = mod.Title,
                     HarmonyId = id,
+                    Mod = mod,
                     Assembly = assembly ?? AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == id),
                 });
             }

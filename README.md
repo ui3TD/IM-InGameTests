@@ -92,12 +92,18 @@ private static IEnumerator ClockMovesWhenUnpaused(TestContext ctx)
 - Build your own assembly before each run; the runner tests whatever is deployed. `source/InGameTests.csproj`
   shows a build target that deploys.
 
-## Saves and known errors
+## Saves, known errors and scope
 
 - `tools/sanitize_save.py` makes a shareable fixture from your own save (renames, swaps modded portrait
   parts, can drop mod variables). Check it with `tools/check_save.py` and one `--vanilla` run.
 - Errors that don't come from what you're testing can be ignored with one .NET regex per line, matched
   against `message\nstack trace`: in `ignore.txt` (committed) or `ignore.local.txt` (your own setup).
+- The per-mod checks (`EveryEnabledHarmonyModIsPatched`, `EveryPatchMethodIsApplied`, `EveryTranspilerChangesIL`,
+  `EveryModTextIsLoaded`) can be limited to the mods you maintain, so a mod you don't can't fail your runs.
+  Scope rules use the same format, one .NET regex per line, matched against each mod's HarmonyID, title and
+  folder name. Put them in `scope.local.txt` (your own setup), or in a file your project passes with
+  `--scope-file`. With no rules every mod is checked. Every mod stays loaded either way; mods outside
+  the scope are listed in a note. A rule that matches no installed mod fails the run, like an unknown `--only`.
 
 ## Options
 
@@ -111,6 +117,7 @@ private static IEnumerator ClockMovesWhenUnpaused(TestContext ctx)
 | `--game-dir` | from Steam | Idol Manager folder. |
 | `--vanilla` | | Disable every mod for this run. |
 | `--only MOD` | | Enable only this mod (folder name, Workshop ID, title or HarmonyID); repeatable. |
+| `--scope-file FILE` | | More scope rules for the per-mod checks; repeatable. |
 | `--allow-input` | | Let keyboard and mouse reach the game. |
 | `--sound` | | Don't mute the game. |
 | `--skip-runner-build` | | Use the plugin already in the game instead of rebuilding it. |

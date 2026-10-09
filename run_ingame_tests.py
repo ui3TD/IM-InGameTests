@@ -74,6 +74,13 @@ def stage_ignore_list(out_dir: Path) -> None:
     (out_dir / "ignore.txt").write_text("\n".join(parts), encoding="utf-8")
 
 
+def stage_scope_list(out_dir: Path, scope_files: list[Path]) -> None:
+    """scope.txt ships with the runner; scope.local.txt and --scope-file narrow it for your setup or project."""
+    paths = [p for p in (HERE / "scope.txt", HERE / "scope.local.txt") if p.is_file()] + scope_files
+    parts = [p.read_text(encoding="utf-8") for p in paths]
+    (out_dir / "scope.txt").write_text("\n".join(parts), encoding="utf-8")
+
+
 def print_summary(results: dict, verbose: bool) -> None:
     for test in results["tests"]:
         mark = "PASS" if test["passed"] else "FAIL"
@@ -103,6 +110,8 @@ def main() -> int:
                     help="treat every mod as disabled for this run (your mod settings are not changed)")
     ap.add_argument("--only", action="append", default=[], metavar="MOD",
                     help="enable only this mod (folder name, Workshop ID, title or HarmonyID); repeatable")
+    ap.add_argument("--scope-file", action="append", default=[], type=Path, metavar="FILE",
+                    help="more scope rules: which mods the per-mod checks judge (see scope.txt); repeatable")
     ap.add_argument("--allow-input", action="store_true",
                     help="let keyboard and mouse reach the game (blocked by default so stray input can't change a run)")
     ap.add_argument("--sound", action="store_true", help="don't mute the game")
@@ -121,6 +130,10 @@ def main() -> int:
     if game_running():
         print("Idol Manager is already running; close it first.")
         return 2
+    for scope_file in args.scope_file:
+        if not scope_file.is_file():
+            print(f"Scope file not found: {scope_file}")
+            return 2
     if not args.save.is_file():
         print(f"Fixture save not found: {args.save}")
         print("Copy a freeplay save there, e.g. from " + str(LOCALLOW / "data" / "auto_save.json"))
@@ -134,6 +147,7 @@ def main() -> int:
     out_dir.mkdir(parents=True)
     shutil.copyfile(args.save, out_dir / "fixture.json")
     stage_ignore_list(out_dir)
+    stage_scope_list(out_dir, args.scope_file)
     results_path = out_dir / "results.json"
 
     # Launch IM.exe directly (not via steam -applaunch) so the script owns the process

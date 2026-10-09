@@ -42,6 +42,7 @@ namespace InGameTests
             // can still be missing at runtime. A failure is reported in results.json, and the
             // runner then refuses to load the save, since the safety patches may be missing.
             Try("ignore list", () => LogCapture.LoadIgnoreFile(Path.Combine(Options.OutDir, "ignore.txt")));
+            Try("scope list", () => ModScope.Load(Path.Combine(Options.OutDir, "scope.txt")));
             Try("run in background", () => UnityEngine.Application.runInBackground = true);
 
             var harmony = new Harmony(PluginGuid);

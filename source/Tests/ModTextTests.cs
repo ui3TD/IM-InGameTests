@@ -16,8 +16,8 @@ namespace InGameTests.Tests
         private static readonly string ConstantsFile = Path.Combine(Path.Combine("JSON", "Constants"), "constants.json");
 
         /// <summary>
-        /// Every text an enabled mod defines is in Language.Data. Texts that a later mod replaces
-        /// are noted with the mod that wins, since the first mod then shows that mod's wording.
+        /// Every text an enabled mod in scope defines is in Language.Data. Texts that a later mod
+        /// replaces are noted with the mod that wins, since the first mod then shows that mod's wording.
         /// </summary>
         [InGameTest(Order = 0)]
         private static IEnumerator EveryModTextIsLoaded(TestContext ctx)
@@ -37,11 +37,17 @@ namespace InGameTests.Tests
             int keys = 0;
             int mods = 0;
             var replaced = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            var outOfScope = new List<string>();
             foreach (Mods._mod mod in enabled)
             {
                 List<JSONNode> constants = Constants(mod).ToList();
                 if (constants.Count == 0)
                 {
+                    continue;
+                }
+                if (!ModScope.Includes(mod))
+                {
+                    outOfScope.Add(mod.Title);
                     continue;
                 }
                 mods++;
@@ -65,6 +71,7 @@ namespace InGameTests.Tests
                     }
                 }
             }
+            ModScope.NoteSkipped(ctx, outOfScope);
             foreach (var pair in replaced)
             {
                 ctx.Note(pair.Key + ": " + string.Join(", ", pair.Value.ToArray()));

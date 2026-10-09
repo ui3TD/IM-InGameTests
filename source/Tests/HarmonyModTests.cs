@@ -11,8 +11,9 @@ using System.Text;
 namespace InGameTests.Tests
 {
     /// <summary>
-    /// Checks of every enabled Harmony mod that need no game time. They catch what a passive run
-    /// can't: a patch that never applied, and a transpiler whose IL search silently failed.
+    /// Checks of every enabled Harmony mod in scope (see ModScope) that need no game time. They
+    /// catch what a passive run can't: a patch that never applied, and a transpiler whose IL
+    /// search silently failed.
     /// </summary>
     internal static class HarmonyModTests
     {
@@ -35,8 +36,10 @@ namespace InGameTests.Tests
             }
 
             int expected = 0;
+            List<HarmonyMod> mods = HarmonyMod.Enabled();
+            ModScope.NoteSkipped(ctx, mods.Where(m => !ModScope.Includes(m.Mod)).Select(m => m.Title));
             // A mod whose assembly isn't loaded fails EveryEnabledHarmonyModIsPatched.
-            foreach (HarmonyMod mod in HarmonyMod.Enabled().Where(m => m.Assembly != null))
+            foreach (HarmonyMod mod in mods.Where(m => m.Assembly != null && ModScope.Includes(m.Mod)))
             {
                 Type[] types;
                 try
@@ -87,7 +90,9 @@ namespace InGameTests.Tests
         [InGameTest(Order = 0)]
         private static IEnumerator EveryTranspilerChangesIL(TestContext ctx)
         {
-            Dictionary<string, string> titles = HarmonyMod.Enabled().ToDictionary(m => m.HarmonyId, m => m.Title);
+            List<HarmonyMod> mods = HarmonyMod.Enabled();
+            ModScope.NoteSkipped(ctx, mods.Where(m => !ModScope.Includes(m.Mod)).Select(m => m.Title));
+            Dictionary<string, string> titles = mods.Where(m => ModScope.Includes(m.Mod)).ToDictionary(m => m.HarmonyId, m => m.Title);
             int checkedTranspilers = 0;
             foreach (MethodBase original in Harmony.GetAllPatchedMethods().ToList())
             {

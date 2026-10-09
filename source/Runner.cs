@@ -143,6 +143,16 @@ namespace InGameTests
                     yield break;
                 }
             }
+            foreach (string rule in ModScope.UnmatchedRules())
+            {
+                result.Passed = false;
+                result.Failures.Add("Scope rule " + rule + " matches no installed mod's HarmonyID, title or folder name");
+            }
+            if (!result.Passed)
+            {
+                yield break;
+            }
+            result.Data["scope"] = ModScope.RuleTexts.Any() ? string.Join("  ", ModScope.RuleTexts.ToArray()) : "every mod";
             result.Data["enabledMods"] = string.Join(", ",
                 Mods._Mods.Where(m => m != null && m.IsEnabled()).Select(m => m.Title).Distinct().ToArray());
 
