@@ -9,7 +9,6 @@ Exit code: 0 pass, 1 test failure, 2 no results (crash/timeout/setup).
     python run_ingame_tests.py                       # smoke suite, 4 in-game weeks
     python run_ingame_tests.py --weeks 12 -v
     python run_ingame_tests.py --save path\\to\\save.json
-    python run_ingame_tests.py --build path\\to\\InGameTests.MyMod.csproj   # your own test assembly
 """
 
 import argparse
@@ -109,9 +108,6 @@ def main() -> int:
     ap.add_argument("--sound", action="store_true", help="don't mute the game")
     ap.add_argument("--skip-runner-build", action="store_true",
                     help="use the runner plugin already in the game instead of rebuilding it")
-    ap.add_argument("--build", action="append", default=[], type=Path, metavar="PROJECT",
-                    help="also build this project before launching, e.g. your own InGameTests.* test assembly "
-                         "or a mod; the project deploys its own output; repeatable")
     ap.add_argument("-v", "--verbose", action="store_true", help="full stack traces and per-mod patch counts")
     args = ap.parse_args()
 
@@ -130,15 +126,8 @@ def main() -> int:
         print("Copy a freeplay save there, e.g. from " + str(LOCALLOW / "data" / "auto_save.json"))
         return 2
 
-    for project in args.build:
-        if not project.is_file():
-            print(f"Project to build not found: {project}")
-            return 2
-
     if not args.skip_runner_build:
         build(HERE / "source" / "InGameTests.csproj", game_dir)
-    for project in args.build:
-        build(project.resolve(), game_dir)
 
     run_id = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     out_dir = LOCALLOW / "InGameTests" / run_id
