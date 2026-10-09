@@ -76,6 +76,12 @@ private static IEnumerator ClockMovesWhenUnpaused(TestContext ctx)
   - `Game.AdvanceDays(ctx, n)` runs the clock like the smoke suite does, clicking through dialogues and popups.
     `Game.ClickDialogue`, `Game.Unstall` and `Game.DescribeClock` are the pieces it's built from.
   - `Game.WaitFor(ctx, condition, seconds, what)` waits or fails.
+  - `Game.Girl(id)`, `Game.OpenProfile(girl, tab)` and `Game.CloseAllPopups(ctx)` reach the fixture's idols and screens.
+  - `Game.SelectPolicy` and `Game.ClockSpeed` change game state until disposed.
+  - `Game.TrainingTickAddParams(room)` runs one real training tick and returns the stamina and stat changes it asks for, without applying them.
+- `TestTools.Spy(method, prefix, postfix)` patches a method ahead of every other patch until disposed, so a
+  prefix sees the caller's arguments and a postfix sees the game's own result. `TestTools.Restore(action)`
+  runs the action on dispose.
 - Use `WaitForSecondsRealtime`: `Time.timeScale` may be raised.
 - Call game methods; `UnityEngine.Input` is blocked during runs.
 - The game's Unity is stripped, so an API that compiles may be missing at runtime. Prefer APIs the game uses.

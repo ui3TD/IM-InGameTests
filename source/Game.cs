@@ -3,13 +3,16 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
+using System.Reflection;
 using UnityEngine;
 
 namespace InGameTests
 {
     /// <summary>
-    /// Helpers for tests, including tests in other InGameTests.* assemblies: waiting, and
-    /// driving the game clock the way a player clicking through would.
+    /// Helpers for tests, including tests in other InGameTests.* assemblies: waiting, driving the
+    /// game clock the way a player clicking through would, opening game screens, and setting up
+    /// game state for one check.
     /// </summary>
     public static class Game
     {
@@ -190,6 +193,125 @@ namespace InGameTests
                 return "unpaused time state (" + state + ")";
             }
             return "no known cause (" + state + ")";
+        }
+
+        /// <summary>The idol with this ID in the loaded save; throws if there's none.</summary>
+        public static data_girls.girls Girl(int id)
+        {
+            data_girls.girls girl = data_girls.girl.FirstOrDefault(g => g.id == id);
+            if (girl == null)
+            {
+                throw new InvalidOperationException("Idol " + id + " isn't in the save; fixtures/README.md lists the fixture's idols");
+            }
+            return girl;
+        }
+
+        /// <summary>Selects one value of a policy type for the duration; Dispose restores the previous selection.</summary>
+        public static IDisposable SelectPolicy(policies._type type, policies._value value)
+        {
+            List<policies.value> values = policies.Values.Where(v => v.Type == type).ToList();
+            Dictionary<policies.value, bool> before = values.ToDictionary(v => v, v => v.Selected);
+            foreach (policies.value v in values)
+            {
+                v.Selected = v.Value == value;
+            }
+            return TestTools.Restore(() =>
+            {
+                foreach (var pair in before)
+                {
+                    pair.Key.Selected = pair.Value;
+                }
+            });
+        }
+
+        /// <summary>Sets the clock speed the game's per-tick code reads (0 while paused) for the duration.</summary>
+        public static IDisposable ClockSpeed(double minutesPerSecond)
+        {
+            double before = staticVars.dateTimeAddMinutesPerSecond;
+            staticVars.dateTimeAddMinutesPerSecond = minutesPerSecond;
+            return TestTools.Restore(() => staticVars.dateTimeAddMinutesPerSecond = before);
+        }
+
+        /// <summary>Ticks per in-game day at the current clock speed; the game divides a training day's stamina cost by this.</summary>
+        public static float TrainingTicksPerDay => Mathf.Floor(1440f / (float)(staticVars.dateTimeAddMinutesPerSecond / staticVars.dateTimeDivider));
+
+        /// <summary>The room, other than a dressing room, where the idol is training a stat (not stamina).</summary>
+        public static agency._room TrainingRoom(int girlId)
+        {
+            agency._room room = agency.GetRooms().FirstOrDefault(r => r.girl != null && r.girl.id == girlId);
+            data_girls._paramType? param = room?.trainingParam();
+            if (room == null || param == null || room.type == agency._type.dressingRoom
+                || param == data_girls._paramType.physicalStamina || param == data_girls._paramType.mentalStamina)
+            {
+                throw new InvalidOperationException("Idol " + girlId + " isn't training a stat in a training room; fixtures/README.md lists who trains");
+            }
+            return room;
+        }
+
+        /// <summary>
+        /// Runs one DoGirlTraining tick in the room and returns the (stat, amount) of every addParam
+        /// call it makes, as the caller passed them. The calls are skipped, so the idol's stamina is
+        /// unchanged, and the trained stat is put back.
+        /// </summary>
+        public static List<KeyValuePair<data_girls._paramType, float>> TrainingTickAddParams(agency._room room)
+        {
+            data_girls.girls girl = room.girl;
+            data_girls._paramType trained = room.trainingParam().Value;
+            float trainedBefore = girl.getParam(trained).val;
+            addParamCalls = new List<KeyValuePair<data_girls._paramType, float>>();
+            try
+            {
+                MethodInfo addParam = AccessTools.Method(typeof(data_girls.girls), nameof(data_girls.girls.addParam));
+                using (TestTools.Spy(addParam, prefix: AccessTools.Method(typeof(Game), nameof(RecordAddParam))))
+                {
+                    AccessTools.Method(typeof(agency._room), "DoGirlTraining").Invoke(room, null);
+                }
+                return addParamCalls;
+            }
+            finally
+            {
+                addParamCalls = null;
+                girl.getParam(trained).val = trainedBefore;
+            }
+        }
+
+        private static List<KeyValuePair<data_girls._paramType, float>> addParamCalls;
+
+        // Records the call and skips it.
+        private static bool RecordAddParam(data_girls._paramType type, float val)
+        {
+            if (addParamCalls == null)
+            {
+                return true;
+            }
+            addParamCalls.Add(new KeyValuePair<data_girls._paramType, float>(type, val));
+            return false;
+        }
+
+        public static Profile_Popup ProfilePopup =>
+            Main.Data.GetComponent<PopupManager>().GetByType(PopupManager._type.girl_profile).obj.GetComponent<Profile_Popup>();
+
+        /// <summary>Opens an idol's profile on a tab, as clicking her portrait and the tab would, and waits a frame.</summary>
+        public static IEnumerator OpenProfile(data_girls.girls girl, Profile_Popup._tabs tab)
+        {
+            if (PopupManager.GetOpenPopupType() != PopupManager._type.girl_profile)
+            {
+                Main.Data.GetComponent<PopupManager>().Open(PopupManager._type.girl_profile);
+            }
+            ProfilePopup.Set(girl);
+            ProfilePopup.SetTab(tab);
+            yield return null;
+        }
+
+        /// <summary>Closes every open popup and waits until the popup manager reports none.</summary>
+        public static IEnumerator CloseAllPopups(TestContext ctx)
+        {
+            for (int i = 0; i < 10 && PopupManager.IsThereAnOpenPopup_(); i++)
+            {
+                PopupManager.Close_();
+                yield return new WaitForSecondsRealtime(0.1f);
+            }
+            yield return WaitFor(ctx, () => !PopupManager.IsThereAnOpenPopup_(), 5f, "popups to close");
         }
 
         /// <summary>Time state, speed, forced pause and open popup, for failure messages.</summary>
