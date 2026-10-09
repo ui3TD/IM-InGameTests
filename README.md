@@ -165,7 +165,7 @@ Some errors don't come from the mod you're testing. Errors the unmodded game alw
 | `--only` | | Enable only this mod (repeatable). |
 | `--allow-input` | | Let keyboard and mouse input reach the game. |
 | `--sound` | | Don't mute the game. |
-| `--no-build` | | Skip building the plugin. |
+| `--skip-runner-build` | | Use the runner plugin already in the game instead of rebuilding it. Projects passed with `--build` are still built. |
 | `--build` | | Also build this project before launching, e.g. your own test assembly (repeatable). |
 | `-v` | | Full stack traces and per-mod patch counts. |
 

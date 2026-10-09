@@ -107,7 +107,8 @@ def main() -> int:
     ap.add_argument("--allow-input", action="store_true",
                     help="let keyboard and mouse reach the game (blocked by default so stray input can't change a run)")
     ap.add_argument("--sound", action="store_true", help="don't mute the game")
-    ap.add_argument("--no-build", action="store_true", help="skip building the runner plugin")
+    ap.add_argument("--skip-runner-build", action="store_true",
+                    help="use the runner plugin already in the game instead of rebuilding it")
     ap.add_argument("--build", action="append", default=[], type=Path, metavar="PROJECT",
                     help="also build this project before launching, e.g. your own InGameTests.* test assembly "
                          "or a mod; the project deploys its own output; repeatable")
@@ -134,7 +135,7 @@ def main() -> int:
             print(f"Project to build not found: {project}")
             return 2
 
-    if not args.no_build:
+    if not args.skip_runner_build:
         build(HERE / "source" / "InGameTests.csproj", game_dir)
     for project in args.build:
         build(project.resolve(), game_dir)
