@@ -35,8 +35,8 @@ namespace InGameTests
             // Tells the host script the runner is alive (it gives up early without this).
             File.WriteAllText(Path.Combine(Options.OutDir, "started.txt"), DateTime.Now.ToString("o"));
             LogCapture.Start();
-            Logger.LogInfo("In-game test mode: suite=" + Options.Suite + (Options.Vanilla ? " (vanilla)" : "")
-                + (Options.Only.Count > 0 ? " (only: " + string.Join(", ", Options.Only.ToArray()) + ")" : "") + " out=" + Options.OutDir);
+            Logger.LogInfo("In-game test mode: suite=" + Options.Suite + (Options.LoadVanilla ? " (load vanilla)" : "")
+                + (Options.Load.Count > 0 ? " (load: " + string.Join(", ", Options.Load.ToArray()) + ")" : "") + " out=" + Options.OutDir);
 
             // Every step is guarded: the game ships a stripped Unity, so an API that compiles
             // can still be missing at runtime. A failure is reported in results.json, and the
@@ -53,7 +53,7 @@ namespace InGameTests
                     Try("patch " + type.Name, () => harmony.CreateClassProcessor(type).Patch());
                 }
             }
-            if (Options.Vanilla || Options.Only.Count > 0)
+            if (Options.LoadVanilla || Options.Load.Count > 0)
             {
                 // Mod selection for this session only; settings writes are blocked.
                 Try("mod filter", () => harmony.Patch(
@@ -91,9 +91,9 @@ namespace InGameTests
         public int Weeks = 4;
         public float TimeScale = 20f;
         public float TimeoutSeconds = 600f;
-        public bool Vanilla;
+        public bool LoadVanilla;
         public bool AllowInput;
-        public readonly System.Collections.Generic.List<string> Only = new System.Collections.Generic.List<string>();
+        public readonly System.Collections.Generic.List<string> Load = new System.Collections.Generic.List<string>();
         public bool Sound;
 
         /// <summary>Returns null when the game was not launched in test mode.</summary>
@@ -109,8 +109,8 @@ namespace InGameTests
                         options = options ?? new TestOptions();
                         options.Suite = next ?? "all";
                         break;
-                    case "-imtest-only":
-                        Ensure(ref options).Only.Add(next);
+                    case "-imtest-load":
+                        Ensure(ref options).Load.Add(next);
                         break;
                     case "-imtest-allow-input":
                         Ensure(ref options).AllowInput = true;
@@ -118,8 +118,8 @@ namespace InGameTests
                     case "-imtest-sound":
                         Ensure(ref options).Sound = true;
                         break;
-                    case "-imtest-vanilla":
-                        Ensure(ref options).Vanilla = true;
+                    case "-imtest-load-vanilla":
+                        Ensure(ref options).LoadVanilla = true;
                         break;
                     case "-imtest-run":
                         Ensure(ref options).RunId = next;

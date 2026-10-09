@@ -16,13 +16,32 @@ namespace InGameTests
     [AttributeUsage(AttributeTargets.Method)]
     public sealed class InGameTestAttribute : Attribute
     {
+        /// <summary>The sequence of tests this one runs in. Name a suite after its scenario, not after a mod.</summary>
         public string Suite = "smoke";
         public int Order;
+    }
+
+    /// <summary>
+    /// Names the one mod a test class's tests exercise, by HarmonyID. Its tests run only while that
+    /// mod is in scope (see ModScope), and the "affected" suite runs them whatever their suite.
+    /// <see cref="EveryMod"/> marks a class whose checks judge every mod in scope. Tests in an
+    /// untagged class are general: they run whenever their suite does, and never in "affected".
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
+    public sealed class ModUnderTestAttribute : Attribute
+    {
+        public const string EveryMod = "*";
+
+        public ModUnderTestAttribute(string harmonyId) => HarmonyId = harmonyId;
+
+        public string HarmonyId { get; }
     }
 
     internal sealed class TestResult
     {
         public string Name;
+        public string Suite;
+        public string Mod;
         public bool Passed = true;
         public float Seconds;
         public readonly List<string> Failures = new List<string>();
@@ -97,7 +116,7 @@ namespace InGameTests
             if (bootstrap.Passed || saveLoaded)
             {
                 LoadTestAssemblies(bootstrap);
-                foreach (MethodInfo test in DiscoverTests(bootstrap))
+                foreach (DiscoveredTest test in DiscoverTests(bootstrap))
                 {
                     yield return RunTest(test);
                 }
@@ -131,12 +150,12 @@ namespace InGameTests
                 yield break;
             }
 
-            if (Plugin.Options.Only.Count > 0)
+            if (Plugin.Options.Load.Count > 0)
             {
                 foreach (string name in ModFilter.UnmatchedNames())
                 {
                     result.Passed = false;
-                    result.Failures.Add("--only " + name + ": no installed mod has that folder name, Workshop ID, title or HarmonyID");
+                    result.Failures.Add("--load " + name + ": no installed mod has that folder name, Workshop ID, title or HarmonyID");
                 }
                 if (!result.Passed)
                 {
@@ -187,16 +206,17 @@ namespace InGameTests
             // Post-load popups and tweens.
             yield return new WaitForSecondsRealtime(3f);
             result.Data["loadedDate"] = staticVars.dateTime.ToString("yyyy-MM-dd HH:mm");
-            result.Data["mods"] = Plugin.Options.Vanilla ? "all disabled (--vanilla)"
-                : Plugin.Options.Only.Count > 0 ? "only " + string.Join(", ", Plugin.Options.Only.ToArray()) + " (--only)"
+            result.Data["mods"] = Plugin.Options.LoadVanilla ? "all disabled (--load-vanilla)"
+                : Plugin.Options.Load.Count > 0 ? "only " + string.Join(", ", Plugin.Options.Load.ToArray()) + " (--load)"
                 : "as configured in game";
         }
 
         private static void OnLoad() => saveLoaded = true;
 
-        private static IEnumerator RunTest(MethodInfo method)
+        private static IEnumerator RunTest(DiscoveredTest test)
         {
-            var result = new TestResult { Name = method.DeclaringType.Name + "." + method.Name };
+            MethodInfo method = test.Method;
+            var result = new TestResult { Name = method.DeclaringType.Name + "." + method.Name, Suite = test.Suite, Mod = test.Mod };
             Results.Add(result);
             var ctx = new TestContext { Result = result };
             LogCapture.Phase = result.Name;
@@ -288,18 +308,69 @@ namespace InGameTests
             }
         }
 
-        private static IEnumerable<MethodInfo> DiscoverTests(TestResult result)
+        private sealed class DiscoveredTest
+        {
+            public MethodInfo Method;
+            public string Suite;
+            public int Order;
+
+            /// <summary>The class's [ModUnderTest] HarmonyID, "*", or null for a general test.</summary>
+            public string Mod;
+        }
+
+        /// <summary>
+        /// The tests of the chosen suite ("all": every suite), in Order. A test in a [ModUnderTest]
+        /// class runs only while its mod is in scope; "affected" runs those tests from every suite
+        /// and leaves out the general ones. Tagged tests left out for scope are noted under bootstrap.
+        /// </summary>
+        private static List<DiscoveredTest> DiscoverTests(TestResult result)
         {
             string suite = Plugin.Options.Suite;
-            return AppDomain.CurrentDomain.GetAssemblies()
+            bool affected = suite == "affected";
+            var selected = new List<DiscoveredTest>();
+            var outOfScope = new SortedDictionary<string, int>(StringComparer.Ordinal);
+            IEnumerable<MethodInfo> methods = AppDomain.CurrentDomain.GetAssemblies()
                 .Where(a => a.GetName().Name.StartsWith("InGameTests", StringComparison.Ordinal))
                 .SelectMany(a => SafeTypes(a, result))
-                .SelectMany(t => t.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
-                .Select(m => new { m, a = m.GetCustomAttributes(typeof(InGameTestAttribute), false).Cast<InGameTestAttribute>().FirstOrDefault() })
-                .Where(x => x.a != null && (suite == "all" || x.a.Suite == suite))
-                .OrderBy(x => x.a.Order)
-                .Select(x => x.m)
-                .ToList();
+                .SelectMany(t => t.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly));
+            foreach (MethodInfo method in methods)
+            {
+                InGameTestAttribute test = method.GetCustomAttributes(typeof(InGameTestAttribute), false).Cast<InGameTestAttribute>().FirstOrDefault();
+                if (test == null || !(suite == "all" || affected || test.Suite == suite))
+                {
+                    continue;
+                }
+                string mod = ModOf(method.DeclaringType);
+                if (mod == null ? affected : mod != ModUnderTestAttribute.EveryMod && !ModScope.Includes(mod))
+                {
+                    if (mod != null)
+                    {
+                        outOfScope.TryGetValue(method.DeclaringType.Name, out int n);
+                        outOfScope[method.DeclaringType.Name] = n + 1;
+                    }
+                    continue;
+                }
+                selected.Add(new DiscoveredTest { Method = method, Suite = test.Suite, Order = test.Order, Mod = mod });
+            }
+            if (outOfScope.Count > 0)
+            {
+                result.Notes.Add("Not in scope, not run: " + string.Join(", ",
+                    outOfScope.Select(kv => kv.Key + " (" + kv.Value + ")").ToArray()));
+            }
+            return selected.OrderBy(t => t.Order).ToList();
+        }
+
+        /// <summary>The [ModUnderTest] HarmonyID of the class or a class it's nested in, or null.</summary>
+        private static string ModOf(Type type)
+        {
+            for (; type != null; type = type.DeclaringType)
+            {
+                if (type.GetCustomAttributes(typeof(ModUnderTestAttribute), false).FirstOrDefault() is ModUnderTestAttribute tag)
+                {
+                    return tag.HarmonyId;
+                }
+            }
+            return null;
         }
 
         private static IEnumerable<Type> SafeTypes(Assembly a, TestResult result)

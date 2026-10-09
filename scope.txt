@@ -1,6 +1,7 @@
-# Which mods the per-mod checks judge, one .NET regex per line, matched against each mod's
-# HarmonyID, title and folder name (a Workshop ID for Workshop mods). A mod is in scope if any
-# rule matches any of them. With no rules, every mod is in scope.
+# Which mods a run tests, one .NET regex per line, matched against each mod's HarmonyID, title
+# and folder name (a Workshop ID for Workshop mods). A mod is in scope if any rule matches any of
+# them. With no rules, every mod is in scope.
+# The scope picks the tests of [ModUnderTest] classes and limits the checks that judge every mod.
 # Every mod stays loaded either way; mods outside the scope are noted instead of checked.
-# Put rules for your own setup in scope.local.txt, which is not committed, or pass a project's
-# file with --scope-file.
+# Put rules for your own setup in scope.local.txt, which is not committed. --scope and
+# --scope-list replace this file and scope.local.txt for one run.

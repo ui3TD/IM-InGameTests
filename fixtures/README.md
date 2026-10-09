@@ -1,7 +1,7 @@
 `default.json` is the save the tests load unless you pass `--save <path>`. It's a freeplay save
 from game v1.0.6 on hard difficulty, dated 2024-03-24 03:50 in game. It holds the states below,
 so a test can start from them instead of building them in code. It passes every suite with every
-mod disabled (`--vanilla`), including a 12-week run.
+mod disabled (`--load-vanilla`), including a 12-week run.
 
 ## What's in it
 

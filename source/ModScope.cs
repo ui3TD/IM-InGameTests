@@ -7,17 +7,19 @@ using System.Text.RegularExpressions;
 namespace InGameTests
 {
     /// <summary>
-    /// Which mods the per-mod checks judge. Every mod stays loaded; mods outside the scope are
-    /// listed in a note instead of checked, so a mod you don't maintain can't fail your runs.
-    /// The rules come from the run's scope.txt, staged by the host script from scope.txt,
-    /// scope.local.txt and any --scope-file. With no rules, every mod is in scope.
+    /// Which mods a run tests. Every mod stays loaded; mods outside the scope are listed in a note
+    /// instead of checked, so a mod you don't maintain can't fail your runs. The scope picks the
+    /// tests of [ModUnderTest] classes and limits the checks that judge every mod. The rules come
+    /// from the run's scope.txt, staged by the host script: the --scope rules and --scope-list
+    /// files when any are given, otherwise scope.txt and scope.local.txt. With no rules, every mod
+    /// is in scope.
     /// </summary>
-    internal static class ModScope
+    public static class ModScope
     {
         private static readonly List<Regex> Rules = new List<Regex>();
 
         /// <summary>The rules as written, for the report.</summary>
-        public static IEnumerable<string> RuleTexts => Rules.Select(r => r.ToString());
+        internal static IEnumerable<string> RuleTexts => Rules.Select(r => r.ToString());
 
         /// <summary>One .NET regex per line; blank lines and # comments are skipped.</summary>
         internal static void Load(string path)
@@ -41,6 +43,20 @@ namespace InGameTests
         public static bool Includes(Mods._mod mod)
         {
             return Rules.Count == 0 || Names(mod).Any(name => Rules.Any(r => r.IsMatch(name)));
+        }
+
+        /// <summary>
+        /// Whether the mod with this HarmonyID is in scope: any installed copy of it matches a rule.
+        /// A HarmonyID no installed mod has is matched against the rules on its own.
+        /// </summary>
+        public static bool Includes(string harmonyId)
+        {
+            if (Rules.Count == 0)
+            {
+                return true;
+            }
+            List<Mods._mod> copies = Mods._Mods.Where(m => m != null && ModFilter.HarmonyId(m) == harmonyId).ToList();
+            return copies.Count > 0 ? copies.Any(Includes) : Rules.Any(r => r.IsMatch(harmonyId));
         }
 
         /// <summary>Notes the mods a check left out, if any.</summary>

@@ -8,6 +8,7 @@ Exit code: 0 pass, 1 test failure, 2 no results (crash/timeout/setup).
 
     python run_ingame_tests.py                       # smoke suite, 4 in-game weeks
     python run_ingame_tests.py --weeks 12 -v
+    python run_ingame_tests.py --scope "My Mod"      # every suite's tests for one mod (suite 'affected')
     python run_ingame_tests.py --save path\\to\\save.json
 """
 
@@ -74,10 +75,13 @@ def stage_ignore_list(out_dir: Path) -> None:
     (out_dir / "ignore.txt").write_text("\n".join(parts), encoding="utf-8")
 
 
-def stage_scope_list(out_dir: Path, scope_files: list[Path]) -> None:
-    """scope.txt ships with the runner; scope.local.txt and --scope-file narrow it for your setup or project."""
-    paths = [p for p in (HERE / "scope.txt", HERE / "scope.local.txt") if p.is_file()] + scope_files
-    parts = [p.read_text(encoding="utf-8") for p in paths]
+def stage_scope_list(out_dir: Path, rules: list[str], scope_lists: list[Path]) -> None:
+    """The --scope rules and --scope-list files when any are given; otherwise scope.txt (ships with
+    the runner) and scope.local.txt (your own setup)."""
+    if rules or scope_lists:
+        parts = rules + [p.read_text(encoding="utf-8") for p in scope_lists]
+    else:
+        parts = [p.read_text(encoding="utf-8") for p in (HERE / "scope.txt", HERE / "scope.local.txt") if p.is_file()]
     (out_dir / "scope.txt").write_text("\n".join(parts), encoding="utf-8")
 
 
@@ -102,18 +106,22 @@ def print_summary(results: dict, verbose: bool) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--suite", default="smoke", help="test suite to run ('all' runs every [InGameTest])")
+    ap.add_argument("--suite", help="test suite to run: 'all' runs every suite, 'affected' every suite's tests for the "
+                    "mods in scope (default: 'affected' with --scope or --scope-list, otherwise 'smoke')")
     ap.add_argument("--save", type=Path, default=HERE / "fixtures" / "default.json", help="fixture save to load")
     ap.add_argument("--weeks", type=int, default=4, help="in-game weeks to advance")
     ap.add_argument("--timescale", type=float, default=20.0, help="Time.timeScale while advancing")
     ap.add_argument("--timeout", type=float, default=300.0, help="seconds before the game is killed")
     ap.add_argument("--game-dir", type=Path, help="Idol Manager install folder (default: found via Steam)")
-    ap.add_argument("--vanilla", action="store_true",
-                    help="treat every mod as disabled for this run (your mod settings are not changed)")
-    ap.add_argument("--only", action="append", default=[], metavar="MOD",
-                    help="enable only this mod (folder name, Workshop ID, title or HarmonyID); repeatable")
-    ap.add_argument("--scope-file", action="append", default=[], type=Path, metavar="FILE",
-                    help="more scope rules: which mods the per-mod checks judge (see scope.txt); repeatable")
+    ap.add_argument("--load-vanilla", action="store_true",
+                    help="load no mods for this run (your mod settings are not changed)")
+    ap.add_argument("--load", action="append", default=[], metavar="MOD",
+                    help="load only this mod (folder name, Workshop ID, title or HarmonyID); repeatable")
+    ap.add_argument("--scope", action="append", default=[], metavar="RULE",
+                    help="test only the mods this rule matches (a scope rule, see scope.txt); repeatable. "
+                    "--scope and --scope-list replace scope.txt and scope.local.txt for the run")
+    ap.add_argument("--scope-list", action="append", default=[], type=Path, metavar="FILE",
+                    help="like --scope, with the rules read from a file; repeatable")
     ap.add_argument("--allow-input", action="store_true",
                     help="let keyboard and mouse reach the game (blocked by default so stray input can't change a run)")
     ap.add_argument("--sound", action="store_true", help="don't mute the game")
@@ -132,10 +140,11 @@ def main() -> int:
     if game_running():
         print("Idol Manager is already running; close it first.")
         return 2
-    for scope_file in args.scope_file:
-        if not scope_file.is_file():
-            print(f"Scope file not found: {scope_file}")
+    for scope_list in args.scope_list:
+        if not scope_list.is_file():
+            print(f"Scope list not found: {scope_list}")
             return 2
+    suite = args.suite or ("affected" if args.scope or args.scope_list else "smoke")
     if not args.save.is_file():
         print(f"Fixture save not found: {args.save}")
         print("Copy a freeplay save there, e.g. from " + str(LOCALLOW / "data" / "auto_save.json"))
@@ -149,24 +158,24 @@ def main() -> int:
     out_dir.mkdir(parents=True)
     shutil.copyfile(args.save, out_dir / "fixture.json")
     stage_ignore_list(out_dir)
-    stage_scope_list(out_dir, args.scope_file)
+    stage_scope_list(out_dir, args.scope, args.scope_list)
     results_path = out_dir / "results.json"
 
     # Launch IM.exe directly (not via steam -applaunch) so the script owns the process
     # and can kill it. Steam must be running; these env vars tell Steamworks which app this is.
     env = dict(os.environ, SteamAppId=APP_ID, SteamGameId=APP_ID)
     cmd = [str(game_dir / "IM.exe"),
-           "-imtest", args.suite, "-imtest-run", run_id,
+           "-imtest", suite, "-imtest-run", run_id,
            "-imtest-weeks", str(args.weeks), "-imtest-timescale", str(args.timescale)]
-    if args.vanilla:
-        cmd.append("-imtest-vanilla")
-    for name in args.only:
-        cmd += ["-imtest-only", name]
+    if args.load_vanilla:
+        cmd.append("-imtest-load-vanilla")
+    for name in args.load:
+        cmd += ["-imtest-load", name]
     if args.allow_input:
         cmd.append("-imtest-allow-input")
     if args.sound:
         cmd.append("-imtest-sound")
-    print(f"Launching game (run {run_id}) ...")
+    print(f"Launching game (run {run_id}, suite {suite}) ...")
     start = time.monotonic()
     proc = subprocess.Popen(cmd, cwd=str(game_dir), env=env)
 

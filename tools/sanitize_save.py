@@ -12,7 +12,7 @@ Prints what it changed and a list of any strings that still look mod-specific, s
 can review them. Check the result loads with mods disabled:
 
     python tools/sanitize_save.py my_save.json fixtures/default.json
-    python run_ingame_tests.py --save fixtures/default.json --vanilla
+    python run_ingame_tests.py --save fixtures/default.json --load-vanilla
 """
 
 import argparse

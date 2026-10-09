@@ -16,6 +16,7 @@ namespace InGameTests.Tests
     /// catch what a passive run can't: a patch that never applied, and a transpiler whose IL
     /// search silently failed.
     /// </summary>
+    [ModUnderTest(ModUnderTestAttribute.EveryMod)]
     internal static class HarmonyModTests
     {
         private static readonly string[] PatchKinds = { "Prefix", "Postfix", "Transpiler", "Finalizer", "ILManipulator" };

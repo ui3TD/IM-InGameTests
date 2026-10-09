@@ -21,6 +21,8 @@ namespace InGameTests
                 TestResult r = results[i];
                 sb.Append("    {\n");
                 sb.Append("      \"name\": ").Append(Str(r.Name)).Append(",\n");
+                sb.Append("      \"suite\": ").Append(Str(r.Suite)).Append(",\n");
+                sb.Append("      \"mod\": ").Append(Str(r.Mod)).Append(",\n");
                 sb.Append("      \"passed\": ").Append(r.Passed ? "true" : "false").Append(",\n");
                 sb.Append("      \"seconds\": ").Append(r.Seconds.ToString("0.0", CultureInfo.InvariantCulture)).Append(",\n");
                 sb.Append("      \"failures\": ").Append(Arr(r.Failures)).Append(",\n");
