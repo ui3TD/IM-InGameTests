@@ -48,7 +48,6 @@ The game folder is found from your Steam libraries (or pass `--game-dir`).
 |---|---|---|
 | `smoke` | `EveryPatchMethodIsApplied` | Every enabled Harmony mod's DLL is loaded with at least one patch applied, and every Prefix, Postfix, Transpiler or Finalizer it declares is applied under its HarmonyID. Harmony skips the patches in types that fail to load, and the loader only logs it. |
 | `smoke` | `EveryTranspilerChangesIL` | Each enabled mod's transpiler changes its method's IL. A transpiler whose IL search finds nothing usually returns the code untouched, and the mod then does nothing, with no error. |
-| `smoke` | `EveryModTextIsLoaded` | Every text in an enabled mod's `constants.json` is in the game's text table. Texts a later mod replaces are noted with the mod that wins. |
 | `smoke` | `AdvanceWeeks` | N weeks pass with no errors. Fails fast if an exception stops the game clock, the usual way a broken mod shows in play. |
 | `selftest` | `DialogueClickThroughFinishesDialogue` | The runner's dialogue clicking reaches the end of a dialogue. |
 | `selftest` | `InputBlockedAndMuted` | Input blocking and muting are in place. |
@@ -97,8 +96,8 @@ private static IEnumerator ClockMovesWhenUnpaused(TestContext ctx)
   parts, can drop mod variables). Check it with `tools/check_save.py` and one `--vanilla` run.
 - Errors that don't come from what you're testing can be ignored with one .NET regex per line, matched
   against `message\nstack trace`: in `ignore.txt` (committed) or `ignore.local.txt` (your own setup).
-- The per-mod checks (`EveryPatchMethodIsApplied`, `EveryTranspilerChangesIL`, `EveryModTextIsLoaded`)
-  can be limited to the mods you maintain, so a mod you don't can't fail your runs. Scope rules use the same format, one .NET regex per line, matched against each mod's HarmonyID, title and
+- The per-mod checks (`EveryPatchMethodIsApplied`, `EveryTranspilerChangesIL`) can be limited to the mods
+  you maintain, so a mod you don't can't fail your runs. Scope rules use the same format, one .NET regex per line, matched against each mod's HarmonyID, title and
   folder name. Put them in `scope.local.txt` (your own setup), or in a file your project passes with
   `--scope-file`. With no rules every mod is checked. Every mod stays loaded either way; mods outside
   the scope are listed in a note. A rule that matches no installed mod fails the run, like an unknown `--only`.
