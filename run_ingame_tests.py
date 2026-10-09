@@ -92,9 +92,11 @@ def print_summary(results: dict, verbose: bool) -> None:
                 print("           " + line)
         for note in test["notes"]:
             print("         note: " + note)
-        if test["data"] and (verbose or test["name"] != "SmokeTests.EveryEnabledHarmonyModIsPatched"):
-            for key, value in test["data"].items():
-                print(f"         {key} = {value}")
+        data = test["data"]
+        if not verbose and test["name"] == "HarmonyModTests.EveryPatchMethodIsApplied":
+            data = {k: v for k, v in data.items() if k == "patchMethodsChecked"}  # per-mod counts only with -v
+        for key, value in data.items():
+            print(f"         {key} = {value}")
     print("PASSED" if results["passed"] else "FAILED")
 
 

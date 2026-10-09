@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -20,8 +21,9 @@ namespace InGameTests.Tests
         private static readonly string[] PatchKinds = { "Prefix", "Postfix", "Transpiler", "Finalizer", "ILManipulator" };
 
         /// <summary>
-        /// Every patch method a mod declares is applied under its HarmonyID. Harmony skips the
-        /// patch classes in types that fail to load, and the mod loader only logs that.
+        /// Each enabled Harmony mod's DLL is loaded with at least one patch applied, and every patch
+        /// method it declares is applied under its HarmonyID. Harmony skips the patch classes in
+        /// types that fail to load, and the mod loader only logs that.
         /// </summary>
         [InGameTest(Order = 0)]
         private static IEnumerator EveryPatchMethodIsApplied(TestContext ctx)
@@ -37,10 +39,23 @@ namespace InGameTests.Tests
 
             int expected = 0;
             List<HarmonyMod> mods = HarmonyMod.Enabled();
+            NoteDisabled(ctx, mods);
             ModScope.NoteSkipped(ctx, mods.Where(m => !ModScope.Includes(m.Mod)).Select(m => m.Title));
-            // A mod whose assembly isn't loaded fails EveryEnabledHarmonyModIsPatched.
-            foreach (HarmonyMod mod in mods.Where(m => m.Assembly != null && ModScope.Includes(m.Mod)))
+            foreach (HarmonyMod mod in mods.Where(m => ModScope.Includes(m.Mod)))
             {
+                if (mod.Assembly == null)
+                {
+                    ctx.Fail(File.Exists(Path.Combine(mod.Mod.Path, mod.HarmonyId + ".dll"))
+                        ? mod + ": " + mod.HarmonyId + ".dll is not loaded"
+                        : mod.Title + ": info.json names HarmonyID " + mod.HarmonyId + " but " + mod.HarmonyId + ".dll is missing");
+                    continue;
+                }
+
+                // A mod may also patch from code instead of attributes, so it only needs some patch applied.
+                int owned = applied.Count(a => a.StartsWith(mod.HarmonyId + " ", StringComparison.Ordinal));
+                ctx.Record(mod.HarmonyId, owned);
+                ctx.Assert(owned > 0, mod + " is enabled but has no patches applied");
+
                 Type[] types;
                 try
                 {
@@ -131,6 +146,22 @@ namespace InGameTests.Tests
             }
             ctx.Record("transpilersChecked", checkedTranspilers);
             yield break;
+        }
+
+        /// <summary>Notes installed Harmony mods that no enabled copy covers.</summary>
+        private static void NoteDisabled(TestContext ctx, List<HarmonyMod> enabled)
+        {
+            List<string> disabled = Mods._Mods
+                .Where(m => m != null && !m.IsEnabled())
+                .Select(m => new { m.Title, Id = ModFilter.HarmonyId(m) })
+                .Where(m => m.Id != null && !enabled.Any(e => e.HarmonyId == m.Id))
+                .Select(m => m.Title + " (" + m.Id + ")")
+                .Distinct()
+                .ToList();
+            if (disabled.Count > 0)
+            {
+                ctx.Note("Harmony mods not enabled, not checked: " + string.Join(", ", disabled.ToArray()));
+            }
         }
 
         private static IEnumerable<Patch> AllPatches(Patches info)
