@@ -49,6 +49,7 @@ The game folder is found from your Steam libraries (or pass `--game-dir`).
 | `smoke` | `EveryEnabledHarmonyModIsPatched` | Every enabled Harmony mod has its DLL and at least one patch applied. |
 | `smoke` | `EveryPatchMethodIsApplied` | Every Prefix, Postfix, Transpiler or Finalizer an enabled Harmony mod declares is applied under its HarmonyID. Harmony skips the patches in types that fail to load, and the loader only logs it. |
 | `smoke` | `EveryTranspilerChangesIL` | Each enabled mod's transpiler changes its method's IL. A transpiler whose IL search finds nothing usually returns the code untouched, and the mod then does nothing, with no error. |
+| `smoke` | `EveryModTextIsLoaded` | Every text in an enabled mod's `constants.json` is in the game's text table. Texts a later mod replaces are noted with the mod that wins. |
 | `smoke` | `AdvanceWeeks` | N weeks pass with no errors. Fails fast if an exception stops the game clock, the usual way a broken mod shows in play. |
 | `selftest` | `DialogueClickThroughFinishesDialogue` | The runner's dialogue clicking reaches the end of a dialogue. |
 | `selftest` | `InputBlockedAndMuted` | Input blocking and muting are in place. |
