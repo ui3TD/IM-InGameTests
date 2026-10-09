@@ -195,6 +195,8 @@ namespace InGameTests
             {
                 SaveManager.LoadEvent -= OnLoad;
             }
+            // Post-load popups and tweens.
+            yield return new WaitForSecondsRealtime(3f);
             result.Data["loadedDate"] = staticVars.dateTime.ToString("yyyy-MM-dd HH:mm");
             result.Data["mods"] = Plugin.Options.LoadVanilla ? "all disabled (--load-vanilla)"
                 : Plugin.Options.Load.Count > 0 ? "only " + string.Join(", ", Plugin.Options.Load.ToArray()) + " (--load)"
@@ -203,15 +205,33 @@ namespace InGameTests
 
         private static void OnLoad() => saveLoaded = true;
 
+        /// <summary>The instance IDs of menu loaders that have started a game.</summary>
+        private static readonly HashSet<int> UsedMenuLoaders = new HashSet<int>();
+
+        /// <summary>
+        /// The main menu's loader. One that has started a game outlives the menu scene and destroys
+        /// itself 5 s after the game appears, so it can still be around when the menu is back.
+        /// </summary>
+        private static MainMenu_LoadGameManager MenuLoader() =>
+            UnityEngine.Object.FindObjectsOfType<MainMenu_LoadGameManager>().FirstOrDefault(m => !UsedMenuLoaders.Contains(m.GetInstanceID()));
+
+        /// <summary>The menu loader, marked as used: call it once per game started from the menu.</summary>
+        internal static MainMenu_LoadGameManager UseMenuLoader()
+        {
+            MainMenu_LoadGameManager loader = MenuLoader();
+            UsedMenuLoaders.Add(loader.GetInstanceID());
+            return loader;
+        }
+
         /// <summary>The main menu scene is up, with the object that loads a game from it.</summary>
         internal static bool AtMainMenu() =>
             SceneManager.GetActiveScene().name == MainMenuScene
-            && UnityEngine.Object.FindObjectOfType<MainMenu_LoadGameManager>() != null
+            && MenuLoader() != null
             && Camera.main != null && Camera.main.GetComponent<mainScript>() != null;
 
         /// <summary>
-        /// From the main menu, loads a save as the Load popup's Load button does, waits for the game
-        /// scene and the idol portraits, then for post-load popups and tweens.
+        /// From the main menu, loads a save as the Load popup's Load button does, and waits for the
+        /// game scene and the idol portraits.
         /// </summary>
         internal static IEnumerator LoadFromMenu(string path, TestResult result)
         {
@@ -221,7 +241,7 @@ namespace InGameTests
             try
             {
                 Popup_Load_Story.Story_Mode = false;
-                UnityEngine.Object.FindObjectOfType<MainMenu_LoadGameManager>().LoadGame(path);
+                UseMenuLoader().LoadGame(path);
                 yield return WaitFor(
                     () => loaded
                           && SceneManager.GetActiveScene().name == GameScene
@@ -233,7 +253,6 @@ namespace InGameTests
             {
                 SaveManager.LoadEvent -= onLoad;
             }
-            yield return new WaitForSecondsRealtime(3f);
         }
 
         private static IEnumerator RunTest(DiscoveredTest test)

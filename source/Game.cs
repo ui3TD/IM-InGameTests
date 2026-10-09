@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -493,20 +494,11 @@ namespace InGameTests
         /// </summary>
         public static IEnumerator ToMainMenu(TestContext ctx)
         {
-            // The menu's load manager outlives the scene it loads and destroys itself 5 s later.
-            // Wait for that, so the helpers below find the new menu's one.
-            yield return TestTools.WaitFor(ctx, () => UnityEngine.Object.FindObjectOfType<MainMenu_LoadGameManager>() == null,
-                10f, "the last load's menu manager to go");
-            if (UnityEngine.Object.FindObjectOfType<MainMenu_LoadGameManager>() != null)
-            {
-                yield break;
-            }
             Main.Data.GetComponent<Tabs_Manager>().CloseTab(force: true);
             Saves.SaveData();
             SceneManager.LoadScene(Runner.MainMenuScene);
             yield return TestTools.WaitFor(ctx, Runner.AtMainMenu, 60f, "the main menu");
-            // As at boot: startup popups settle.
-            yield return new WaitForSecondsRealtime(2f);
+            yield return Settle(ctx, "menu", 2f);
         }
 
         /// <summary>
@@ -520,6 +512,7 @@ namespace InGameTests
             yield return Runner.LoadFromMenu(path, ctx.Result);
             if (SceneManager.GetActiveScene().name == Runner.GameScene)
             {
+                yield return Settle(ctx, "load", 3f);
                 yield return CloseAllPopups(ctx);
             }
         }
@@ -540,16 +533,68 @@ namespace InGameTests
             player.SetFirstName("Test");
             player.SetLastName("Runner");
             player.SetGroupName("Test Group");
-            UnityEngine.Object.FindObjectOfType<MainMenu_LoadGameManager>().StartNewGame();
+            Runner.UseMenuLoader().StartNewGame();
             yield return TestTools.WaitFor(ctx,
                 () => SceneManager.GetActiveScene().name == Runner.GameScene
                       && data_girls_textures.IsReady()
                       && Camera.main != null && Camera.main.GetComponent<mainScript>() != null
                       && !mainScript.IsMainMenu(),
                 180f, "the new game's scene");
-            // Post-load popups and tweens, as after a load.
-            yield return new WaitForSecondsRealtime(3f);
+            yield return Settle(ctx, "newGame", 3f);
         }
+
+        /// <summary>
+        /// After a scene change: waits until no popup is open and no tween plays for 0.2 s, or for
+        /// at most maxSeconds, and records how long it took. Never fails.
+        /// </summary>
+        private static IEnumerator Settle(TestContext ctx, string what, float maxSeconds)
+        {
+            float start = Time.realtimeSinceStartup;
+            float quietSince = -1f;
+            while (Time.realtimeSinceStartup - start < maxSeconds)
+            {
+                bool quiet;
+                try
+                {
+                    quiet = !PopupManager.IsThereAnOpenPopup_() && !AnyTweenPlaying();
+                }
+                catch (Exception)
+                {
+                    quiet = false;
+                }
+                if (!quiet)
+                {
+                    quietSince = -1f;
+                }
+                else if (quietSince < 0f)
+                {
+                    quietSince = Time.realtimeSinceStartup;
+                }
+                else if (Time.realtimeSinceStartup - quietSince >= 0.2f)
+                {
+                    break;
+                }
+                yield return null;
+            }
+            ctx.Record(what + "SettleSeconds", (Time.realtimeSinceStartup - start).ToString("0.0", CultureInfo.InvariantCulture));
+        }
+
+        // The game's DOTween (1.2.335) has no public count of playing tweens. Only tweens that
+        // will finish on a live object count: not the menu background's endless loops, not tweens
+        // whose object a scene change destroyed (they never finish), and not music fades.
+        private static readonly FieldInfo ActiveTweens =
+            AccessTools.Field(typeof(DG.Tweening.DOTween).Assembly.GetType("DG.Tweening.Core.TweenManager"), "_activeTweens");
+
+        private static readonly AccessTools.FieldRef<DG.Tweening.Tween, int> TweenLoops =
+            AccessTools.FieldRefAccess<DG.Tweening.Tween, int>("loops");
+
+        private static readonly AccessTools.FieldRef<DG.Tweening.Tween, object> TweenTarget =
+            AccessTools.FieldRefAccess<DG.Tweening.Tween, object>("target");
+
+        private static bool AnyTweenPlaying() =>
+            ((DG.Tweening.Tween[])ActiveTweens.GetValue(null)).Any(t => t != null && TweenLoops(t) != -1
+                && TweenTarget(t) is UnityEngine.Object target && target != null && !(target is AudioSource)
+                && DG.Tweening.TweenExtensions.IsPlaying(t));
 
         /// <summary>Time state, speed, forced pause and open popup, for failure messages.</summary>
         internal static string DescribeClock()

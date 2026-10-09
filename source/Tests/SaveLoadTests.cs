@@ -54,52 +54,7 @@ namespace InGameTests.Tests
             yield return RunADay(ctx, "the quickload");
         }
 
-        /// <summary>
-        /// The same round trip through the main menu: quicksave, leave for the menu, load that file
-        /// from the menu and quicksave again. Unlike F9 this loads a new scene, so the game's objects
-        /// start fresh and only static state carries over. A mod that keeps a value in a static,
-        /// or doesn't set one up again when the scene loads, shows here and not in the quickload.
-        /// </summary>
-        [InGameTest(Suite = "menu", Order = 3)]
-        private static IEnumerator MainMenuRoundTrip(TestContext ctx)
-        {
-            string beforePath = Path.Combine(SaveSandbox.Dir, "menu_roundtrip_before.json");
-            string loadPath = Path.Combine(SaveSandbox.Dir, "menu_roundtrip_load.json");
-            string afterPath = Path.Combine(SaveSandbox.Dir, "menu_roundtrip_after.json");
-
-            yield return Game.Quicksave(ctx);
-            if (!ctx.Result.Passed)
-            {
-                yield break;
-            }
-            File.Copy(Game.QuicksaveFile, beforePath, overwrite: true);
-            // Load a copy: the game may rewrite the file it loaded from.
-            File.Copy(Game.QuicksaveFile, loadPath, overwrite: true);
-
-            yield return Game.ToMainMenu(ctx);
-            if (!ctx.Result.Passed)
-            {
-                yield break;
-            }
-            yield return Game.LoadFromMainMenu(ctx, loadPath);
-            if (!ctx.Result.Passed)
-            {
-                yield break;
-            }
-            string loadDate = ExtensionMethods.ToDataString(staticVars.dateTime);
-
-            yield return Game.Quicksave(ctx);
-            if (!ctx.Result.Passed)
-            {
-                yield break;
-            }
-            File.Copy(Game.QuicksaveFile, afterPath, overwrite: true);
-
-            CompareSaves(ctx, beforePath, afterPath, loadDate, sceneLoad: true, "quicksave, main menu, load and quicksave");
-            yield return RunADay(ctx, "the load from the main menu");
-        }
-
-        private static void CompareSaves(TestContext ctx, string beforePath, string afterPath, string loadDate, bool sceneLoad, string steps)
+        internal static void CompareSaves(TestContext ctx, string beforePath, string afterPath, string loadDate, bool sceneLoad, string steps)
         {
             JSONNode before = JSON.Parse(File.ReadAllText(beforePath));
             var differences = new List<Difference>();
@@ -121,7 +76,7 @@ namespace InGameTests.Tests
         }
 
         /// <summary>One day on the reloaded game, since one exception in a day handler stops the clock for good.</summary>
-        private static IEnumerator RunADay(TestContext ctx, string after)
+        internal static IEnumerator RunADay(TestContext ctx, string after)
         {
             mainScript main = Game.Main;
             int newDays = 0;

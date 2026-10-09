@@ -30,6 +30,10 @@
       <HintPath>$(GameDllDir)\Assembly-CSharp-firstpass.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="DOTween">
+      <HintPath>$(GameDllDir)\DOTween.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.UI">
       <HintPath>$(GameDllDir)\UnityEngine.UI.dll</HintPath>
       <Private>false</Private>
