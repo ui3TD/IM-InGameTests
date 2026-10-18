@@ -18,8 +18,8 @@ The IDs are stable. A test can rely on them.
 | | graduated | 4 |
 | | newly hired in March (fresh stats, no singles yet) | 222, 223, 224, 225 |
 | | active wish: a single / a show | 1 / 9 |
-| Groups | main group 0 | 1, 3, 6, 8, 11, 13, 71, 73, 167, 222, 223 |
-| | sister group 1 | 4, 9, 12, 224, 225 |
+| Groups | main group 0, Sakura Drops | 1, 3, 6, 8, 11, 13, 71, 73, 167, 222, 223 |
+| | sister group 1, Hoshizora Lane | 4, 9, 12, 224, 225 |
 | Relationships | idols dating each other | 71 + 222 |
 | | dating the player (fun route, casual) | 12 |
 | | outside boyfriend the player knows about | 9 (unknown: 4, 8, 167) |

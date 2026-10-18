@@ -29,9 +29,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("input", type=Path)
     ap.add_argument("output", type=Path)
-    ap.add_argument("--first-name", default="Test")
-    ap.add_argument("--last-name", default="Producer")
-    ap.add_argument("--group-name", default="Test Group")
+    ap.add_argument("--first-name", default="Daichi")
+    ap.add_argument("--last-name", default="Kuroda")
+    ap.add_argument("--group-name", default="Sakura Drops")
+    ap.add_argument("--sister-group-name", action="append", default=None, metavar="NAME",
+                    help="sister group names in ID order (repeatable); default Hoshizora Lane, "
+                         "then '<group name> Sister N' for any further ones")
     ap.add_argument("--drop-girl-variable", action="append", default=[], metavar="REGEX",
                     help="remove idol variables fully matching REGEX (repeatable)")
     args = ap.parse_args()
@@ -48,6 +51,7 @@ def main() -> int:
     report.append(f"player name {old_first!r} {old_last!r} -> {args.first_name!r} {args.last_name!r}")
 
     # The player's groups: the main group, then sister groups in ID order.
+    sister_names = args.sister_group_name if args.sister_group_name is not None else ["Hoshizora Lane"]
     renames = {}
     main_group = player.get("GroupName", "")
     if main_group:
@@ -56,7 +60,8 @@ def main() -> int:
     for group in data.get("Groups__Groups", []):
         title = group.get("Title", "")
         if title and title not in renames:
-            renames[title] = f"{args.group_name} Sister {sister}"
+            renames[title] = (sister_names[sister - 1] if sister <= len(sister_names)
+                              else f"{args.group_name} Sister {sister}")
             sister += 1
     player["GroupName"] = args.group_name
 

@@ -530,9 +530,9 @@ namespace InGameTests
             player.SetDefaults();
             player.IsStoryMode = false;
             player.SetGender(_IsMale: true);
-            player.SetFirstName("Test");
-            player.SetLastName("Runner");
-            player.SetGroupName("Test Group");
+            player.SetFirstName("Daichi");
+            player.SetLastName("Kuroda");
+            player.SetGroupName("Sakura Drops");
             Runner.UseMenuLoader().StartNewGame();
             yield return TestTools.WaitFor(ctx,
                 () => SceneManager.GetActiveScene().name == Runner.GameScene
