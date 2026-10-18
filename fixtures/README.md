@@ -18,6 +18,7 @@ The IDs are stable. A test can rely on them.
 | | graduated | 4 |
 | | newly hired in March (fresh stats, no singles yet) | 222, 223, 224, 225 |
 | | active wish: a single / a show | 1 / 9 |
+| | stamina and mental stamina vary; low physical stamina for the injured idol, low mental stamina for the depressed one | 13 / 6 |
 | Groups | main group 0, Sakura Drops | 1, 3, 6, 8, 11, 13, 71, 73, 167, 222, 223 |
 | | sister group 1, Hoshizora Lane | 4, 9, 12, 224, 225 |
 | Relationships | idols dating each other | 71 + 222 |
@@ -35,16 +36,18 @@ The IDs are stable. A test can rely on them.
 | Singles | ready to release | 32 |
 | | in production in the recording studio (finishes 2024-03-25) | 33 |
 | | just started, no progress | 34 |
-| | 25 released, the latest on 2023-11-04 | |
+| | 25 released, the latest on 2023-11-04, in varied genres, lyrics and choreography; the main group's last few are Metal | |
+| | sold under their pressing (the rest sold out) | 5, 11, 17, 22, 25 |
 | Shows | TV, airing | 5 |
-| | internet, airing | 2 |
-| | radio, relaunching | 1 |
-| | in development | 6 |
+| | radio, airing | 2 |
+| | internet, relaunching | 1 |
+| | radio, in development | 6 |
+| | genres: Hobbies, Music, Drama, Food, Game Show, Interviews | 1 to 6 |
 | | cancelled (TV, 24 episodes each) | 3, 4 |
 | Special events | world tour, fully produced, ready to launch | tour 3 |
 | | stadium concert, fully produced, ready to launch | concert 8 |
 | | finished election (July 2023): single 27, concert 6, 9 ranked idols | election 1 |
-| | 2 finished tours, 4 finished concerts; Coliseum unlocked | |
+| | 2 finished tours, 4 finished concerts (concerts 1 and 2 at 86% and 94% attendance, 3 and 6 sold out); Coliseum unlocked | |
 | Money | ¥382M; a 3-month ¥10M bank loan paid weekly until 2024-06-04 | loan 1 |
 | Business | idol 3 has a TV drama contract until 2024-06-24 | |
 | Options | substories, random events and dating scandals on, as in a new game | |

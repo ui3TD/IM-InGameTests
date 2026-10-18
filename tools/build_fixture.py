@@ -124,6 +124,20 @@ NEW_IDOLS = [
      ("0 10 0", "1 10 12", "2 10 5")),  # Indiscreet
 ]
 
+# A new hire's own stats, in place of the cloned idol's: data_girls._paramType 0-7 (cute, cool, sexy,
+# pretty, vocal, dance, funny, smart) as (value, potential), then 11-15 (growth, ambitions, friendliness,
+# scandal, teamChemistry), her peak age and her salary.
+FRESH_STATS = {
+    "222": ([(24, 78), (12, 55), (30, 85), (22, 70), (14, 60), (9, 48), (11, 52), (17, 66)],
+            [61, 47, 72, 38, 55], "21", "58000"),
+    "223": ([(18, 70), (21, 74), (6, 40), (19, 68), (31, 92), (28, 88), (12, 55), (25, 80)],
+            [88, 79, 35, 12, 41], "20", "52000"),
+    "224": ([(27, 85), (8, 50), (5, 35), (20, 72), (12, 64), (19, 77), (23, 70), (10, 58)],
+            [40, 22, 90, 9, 83], "19", "49500"),
+    "225": ([(11, 58), (26, 80), (15, 62), (13, 60), (9, 52), (22, 75), (29, 86), (14, 63)],
+            [52, 66, 58, 77, 30], "23", "55000"),
+}
+
 DATING_FREE = {
     "Previous_Attempt": "0", "Success_Counter": "0", "Partner_Status": "0", "Partner_Status_Known_To_Player": "0",
     "Is_Partner_Status_Known": "false", "Is_Sexuality_Known": "false", "Is_Uninterested": "false",
@@ -132,7 +146,7 @@ DATING_FREE = {
 
 
 def new_idols(d):
-    """Four newly hired idols, two per group, cloned from existing idols' stats, each with her own face."""
+    """Four newly hired idols, two per group, each with her own face and fresh stats."""
     for gid, source, grp, first, last, birthday, sexuality, trait, hired, portrait in NEW_IDOLS:
         g = copy.deepcopy(girl(d, source))
         g.pop("Wish_Formula", None)
@@ -150,8 +164,16 @@ def new_idols(d):
             "textureAssets": [{"type": asset_id[0], "asset_id": asset_id} for asset_id in portrait],
         })
         set_status(g, NORMAL)
-        param(g, "10")["_val"] = "1500"   # famePoints: a new hire's
+        skills, personality, peak_age, salary = FRESH_STATS[gid]
+        for ptype, (val, potential) in enumerate(skills):
+            param(g, str(ptype)).update({"_val": str(val), "potential": str(potential), "daily_change": "0"})
+        for ptype, val in zip(range(11, 16), personality):
+            param(g, str(ptype))["_val"] = str(val)
+        param(g, "8")["_val"] = "100"     # physicalStamina: rested
+        param(g, "9")["_val"] = "100"     # mentalStamina
+        param(g, "10").update({"_val": "1500", "daily_change": "0"})   # famePoints: a new hire's
         param(g, "19")["_val"] = "0"      # scandalPoints
+        g.update({"peakAge": peak_age, "salary": salary})
         for fans in g["Fans"]:
             fans["people"] = str(max(1, int(fans["people"]) // 100))
         upsert(d["data_girls__Girls"], "id", g)
@@ -488,6 +510,80 @@ def loan(d):
     counter_at_least(d, "loans__LastLoanID", 1)
 
 
+# Released singles' genre, lyrics and choreography ids (Singles/genres.json, lyrics.json, choreography.json).
+# The original save had Metal, Regret, Cute on every single; the main group now moves into metal over its
+# last few singles, and 30 (the latest) and the unreleased ones keep that style.
+SINGLE_STYLES = {
+    "1": ("0", "10", "20"),    # Pop, Love, Cute
+    "3": ("0", "14", "24"),    # Pop, Friends, Energetic
+    "4": ("1", "12", "24"),    # EDM, Partying, Energetic
+    "5": ("0", "10", "23"),    # Pop, Love, Elegant
+    "7": ("3", "11", "21"),    # Rock, Rebelling, Cool
+    "8": ("0", "13", "23"),    # Pop, Loneliness, Elegant
+    "10": ("6", "10", "22"),   # R&B, Love, Sexy
+    "11": ("3", "16", "24"),   # Rock, Happiness, Energetic
+    "13": ("0", "10", "20"),   # Pop, Love, Cute
+    "14": ("2", "11", "21"),   # Metal, Rebelling, Cool
+    "16": ("0", "16", "20"),   # Pop, Happiness, Cute
+    "17": ("6", "13", "23"),   # R&B, Loneliness, Elegant
+    "18": ("1", "12", "25"),   # EDM, Partying, Street
+    "19": ("4", "11", "25"),   # Hip Hop, Rebelling, Street
+    "20": ("0", "10", "20"),   # Pop, Love, Cute
+    "21": ("0", "16", "20"),   # Pop, Happiness, Cute
+    "22": ("5", "12", "24"),   # Funk, Partying, Energetic
+    "23": ("2", "18", "21"),   # Metal, Anxiety, Cool
+    "24": ("1", "14", "24"),   # EDM, Friends, Energetic
+    "25": ("2", "12", "24"),   # Metal, Partying, Energetic
+    "26": ("8", "15", "23"),   # Enka, Regret, Elegant
+    "27": ("2", "15", "21"),   # Metal, Regret, Cool
+    "28": ("7", "17", "26"),   # Avant-garde, Politics, Experimental
+    "29": ("2", "15", "20"),   # Metal, Regret, Cute
+}
+
+# Singles that sold under their pressing (sales, by single): every single in the original save sold out.
+# Profit keeps each single's profit per copy.
+UNDERSOLD = {"5": 8710, "11": 83412, "17": 171930, "22": 14208, "25": 187455}
+
+# (physicalStamina, mentalStamina) per idol: the original save had 92 and 100 for everyone. The cafe's
+# wait staff (1, 3, 11, 71, 222, 223) stay above its stamina limit of 75, and the training idol (167) above
+# the save's training policy (stop at 80), or the game ends her practice; the depressed idol's mental
+# stamina and the injured idol's physical stamina are low.
+STAMINA = {
+    "1": (88, 95), "3": (81, 90), "6": (70, 12), "8": (100, 74), "9": (64, 83), "11": (85, 97),
+    "12": (73, 58), "13": (18, 66), "71": (90, 80), "73": (59, 71), "167": (91, 88),
+}
+
+# Earlier concerts that didn't sell out: Actual_Attendance by concert, with audience and revenue scaled.
+CONCERT_ATTENDANCE = {"1": 0.86, "2": 0.94}
+
+# Show genres (Shows/genres.json): the original save had Game Show on every show.
+SHOW_GENRES = {"1": "2", "2": "3", "3": "4", "4": "5", "5": "7", "6": "0"}   # Hobbies, Music, Drama, Food, Game Show, Interviews
+
+
+def variety(d):
+    """Varied single styles, sales under the pressing, stamina, concert attendance and show genres."""
+    for sid, (genre, lyrics, choreography) in SINGLE_STYLES.items():
+        single(d, sid).update({"genre": genre, "lyrics": lyrics, "choreography": choreography})
+    for sid, sales in UNDERSOLD.items():
+        s = single(d, sid)
+        release = s["ReleaseData"]
+        per_copy = int(release["Profit"]) / int(release["Sales"])   # the same before and after, so a rerun changes nothing
+        release.update({"Sales": str(sales), "Profit": str(round(per_copy * sales))})
+    for gid, (physical, mental) in STAMINA.items():
+        g = girl(d, gid)
+        param(g, "8")["_val"] = str(physical)
+        param(g, "9")["_val"] = str(mental)
+    for cid, attendance in CONCERT_ATTENDANCE.items():
+        values = by_id(d["SEvent_Concert__Concerts"], "ID", cid)["ProjectedValues"]
+        full = int(values["Actual_Audience"]) / float(values["Actual_Attendance"])
+        revenue_per_seat = int(values["Actual_Revenue"]) / int(values["Actual_Audience"])
+        audience = round(full * attendance)
+        values.update({"Actual_Attendance": repr(attendance), "Actual_Audience": str(audience),
+                       "Actual_Revenue": str(round(revenue_per_seat * audience))})
+    for sid, genre in SHOW_GENRES.items():
+        show(d, sid)["genre"] = genre
+
+
 AWAY = {str(s) for s in (INJURED, GRADUATED, DEPRESSED, HIATUS)}
 
 
@@ -512,7 +608,7 @@ def remove_away_idols(d):
 
 STEPS = [
     options_on, cleanup, new_idols, new_staff, floors, idol_statuses, wishes, relationships,
-    theaters, cafe, singles_, shows, tour, concert, election, loan, remove_away_idols,
+    theaters, cafe, singles_, shows, tour, concert, election, loan, variety, remove_away_idols,
 ]
 
 
