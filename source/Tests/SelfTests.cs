@@ -12,6 +12,16 @@ namespace InGameTests.Tests
     /// </summary>
     internal static class SelfTests
     {
+        /// <summary>A test with NeedsSave = false runs on the boot menu, before the fixture save loads.</summary>
+        [InGameTest(Suite = "selftest", NeedsSave = false)]
+        private static IEnumerator NoSaveTestRunsOnBootMenu(TestContext ctx)
+        {
+            ctx.Assert(Runner.AtMainMenu(), "Expected the main menu, got scene "
+                + UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+            ctx.Assert(!Runner.SaveLoaded, "Expected no save loaded yet");
+            yield break;
+        }
+
         /// <summary>Game.ClickDialogue gets a dialogue with a choice to the end.</summary>
         [InGameTest(Suite = "selftest")]
         private static IEnumerator DialogueClickThroughFinishesDialogue(TestContext ctx)

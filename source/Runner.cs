@@ -11,7 +11,8 @@ namespace InGameTests
 {
     /// <summary>
     /// Marks a coroutine test. Signature: <c>static IEnumerator Name(TestContext ctx)</c>.
-    /// Tests run in Order after the fixture save is loaded, all in one game boot.
+    /// Tests run in Order after the fixture save is loaded, all in one game boot. Tests with
+    /// NeedsSave = false run first, on the boot menu, before the save loads.
     /// </summary>
     [AttributeUsage(AttributeTargets.Method)]
     public sealed class InGameTestAttribute : Attribute
@@ -19,6 +20,12 @@ namespace InGameTests
         /// <summary>The sequence of tests this one runs in. Name a suite after its scenario, not after a mod.</summary>
         public string Suite = "smoke";
         public int Order;
+
+        /// <summary>
+        /// False for a test of the main menu itself: it runs on the boot menu, and when no test in the
+        /// run needs the save, the save isn't loaded. Such a test must leave the game on the main menu.
+        /// </summary>
+        public bool NeedsSave = true;
     }
 
     /// <summary>
@@ -90,35 +97,40 @@ namespace InGameTests
             var bootstrap = new TestResult { Name = "bootstrap" };
             Results.Add(bootstrap);
 
-            IEnumerator boot = Bootstrap(bootstrap);
-            while (true)
-            {
-                bool more;
-                try
-                {
-                    more = boot.MoveNext();
-                }
-                catch (Exception ex)
-                {
-                    bootstrap.Passed = false;
-                    bootstrap.Failures.Add("Bootstrap threw: " + ex);
-                    break;
-                }
-                if (!more)
-                {
-                    break;
-                }
-                yield return boot.Current;
-            }
+            yield return Guarded(BootToMenu(bootstrap), bootstrap);
+            bool booted = bootstrap.Passed;
             AddLogFailures(bootstrap, 0);
             bootstrap.Seconds = Time.realtimeSinceStartup - start;
 
-            if (bootstrap.Passed || saveLoaded)
+            if (booted)
             {
                 LoadTestAssemblies(bootstrap);
-                foreach (DiscoveredTest test in DiscoverTests(bootstrap))
+                List<DiscoveredTest> tests = DiscoverTests(bootstrap);
+                foreach (DiscoveredTest test in tests.Where(t => !t.NeedsSave))
                 {
                     yield return RunTest(test);
+                }
+
+                List<DiscoveredTest> inGame = tests.Where(t => t.NeedsSave).ToList();
+                if (inGame.Count > 0)
+                {
+                    int logStart = LogCapture.Count;
+                    float loadStart = Time.realtimeSinceStartup;
+                    yield return Guarded(LoadFixture(bootstrap), bootstrap);
+                    AddLogFailures(bootstrap, logStart, "load");
+                    bootstrap.Seconds += Time.realtimeSinceStartup - loadStart;
+
+                    if (bootstrap.Passed || saveLoaded)
+                    {
+                        foreach (DiscoveredTest test in inGame)
+                        {
+                            yield return RunTest(test);
+                        }
+                    }
+                }
+                else
+                {
+                    bootstrap.Notes.Add("No test in this run needs the fixture save, so it wasn't loaded.");
                 }
             }
 
@@ -128,7 +140,31 @@ namespace InGameTests
             Application.Quit();
         }
 
-        private static IEnumerator Bootstrap(TestResult result)
+        /// <summary>Steps a bootstrap phase, failing the result if it throws.</summary>
+        private static IEnumerator Guarded(IEnumerator phase, TestResult result)
+        {
+            while (true)
+            {
+                bool more;
+                try
+                {
+                    more = phase.MoveNext();
+                }
+                catch (Exception ex)
+                {
+                    result.Passed = false;
+                    result.Failures.Add("Bootstrap threw: " + ex);
+                    yield break;
+                }
+                if (!more)
+                {
+                    yield break;
+                }
+                yield return phase.Current;
+            }
+        }
+
+        private static IEnumerator BootToMenu(TestResult result)
         {
             if (Plugin.StartupErrors.Count > 0)
             {
@@ -172,6 +208,16 @@ namespace InGameTests
 
             // Let mod loaders finish logging and any startup popups settle.
             yield return new WaitForSecondsRealtime(2f);
+        }
+
+        private static IEnumerator LoadFixture(TestResult result)
+        {
+            LogCapture.Phase = "load";
+            yield return WaitFor(AtMainMenu, 30f, "the main menu, where a test with NeedsSave = false must leave the game", result);
+            if (!result.Passed)
+            {
+                yield break;
+            }
 
             string fixture = Plugin.Options.SavePath;
             if (string.IsNullOrEmpty(fixture) || !File.Exists(fixture))
@@ -185,7 +231,6 @@ namespace InGameTests
             string copy = Path.Combine(Plugin.Options.OutDir, "fixture_copy.json");
             File.Copy(fixture, copy, overwrite: true);
 
-            LogCapture.Phase = "load";
             SaveManager.LoadEvent += OnLoad;
             try
             {
@@ -204,6 +249,9 @@ namespace InGameTests
         }
 
         private static void OnLoad() => saveLoaded = true;
+
+        /// <summary>Whether the fixture save has been loaded.</summary>
+        internal static bool SaveLoaded => saveLoaded;
 
         /// <summary>The instance IDs of menu loaders that have started a game.</summary>
         private static readonly HashSet<int> UsedMenuLoaders = new HashSet<int>();
@@ -310,11 +358,15 @@ namespace InGameTests
             result.Seconds = Time.realtimeSinceStartup - start;
         }
 
-        private static void AddLogFailures(TestResult result, int fromIndex)
+        /// <summary>
+        /// Fails the result with the errors logged since fromIndex: all of them from 0, else those
+        /// logged in the given phase (default: the result's own).
+        /// </summary>
+        private static void AddLogFailures(TestResult result, int fromIndex, string phase = null)
         {
             foreach (LogEntry e in LogCapture.Failures(fromIndex))
             {
-                if (fromIndex == 0 || e.Phase == result.Name)
+                if (fromIndex == 0 || e.Phase == (phase ?? result.Name))
                 {
                     result.Passed = false;
                     result.Failures.Add("[" + e.Source + " " + e.Level + "] " + e.Message
@@ -355,6 +407,7 @@ namespace InGameTests
             public MethodInfo Method;
             public string Suite;
             public int Order;
+            public bool NeedsSave;
 
             /// <summary>The class's [ModUnderTest] HarmonyID, "*", or null for a general test.</summary>
             public string Mod;
@@ -392,7 +445,7 @@ namespace InGameTests
                     }
                     continue;
                 }
-                selected.Add(new DiscoveredTest { Method = method, Suite = test.Suite, Order = test.Order, Mod = mod });
+                selected.Add(new DiscoveredTest { Method = method, Suite = test.Suite, Order = test.Order, NeedsSave = test.NeedsSave, Mod = mod });
             }
             if (outOfScope.Count > 0)
             {

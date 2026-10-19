@@ -40,13 +40,14 @@ The game folder is found from your Steam libraries (or pass `--game-dir`).
    achievement writes, ignores keyboard and mouse input, and mutes the game (`--allow-input` and
    `--sound` turn the last two off). After the run, the script checks that nothing in your save
    folder (`...\Idol Manager\data\`) changed, and fails the run if anything did.
-3. It loads a copy of the test save, `fixtures/default.json` by default. [fixtures/README.md](fixtures/README.md)
-   lists what's in it.
-4. It runs the chosen tests (see [Choosing what runs](#choosing-what-runs)) one after another in the
+3. Tests marked `NeedsSave = false` run first, on the main menu the game boots to.
+4. It loads a copy of the test save, `fixtures/default.json` by default. [fixtures/README.md](fixtures/README.md)
+   lists what's in it. When no test in the run needs the save, it isn't loaded, and the run ends here.
+5. It runs the other chosen tests (see [Choosing what runs](#choosing-what-runs)) one after another in the
    same session. While time advances it closes popups and takes the first choice in dialogues, like a
    player would.
-5. Any Unity, BepInEx or Harmony error that isn't on the ignore list fails the test it happened in.
-6. It writes `results.json` to `%USERPROFILE%\AppData\LocalLow\Glitch Pitch\Idol Manager\InGameTests\<run>\`
+6. Any Unity, BepInEx or Harmony error that isn't on the ignore list fails the test it happened in.
+7. It writes `results.json` to `%USERPROFILE%\AppData\LocalLow\Glitch Pitch\Idol Manager\InGameTests\<run>\`
    and quits, and the script prints the summary.
 
 ## Included tests
@@ -61,6 +62,7 @@ The game folder is found from your Steam libraries (or pass `--game-dir`).
 | `menu` | `NewGameRunsToItsFirstWeek` | From the menu after the fixture was played, a new free-play game starts on the game's start date and runs to its first Monday (4 days, one weekly event) with no errors. Mods run their new-game setup instead of their load code. Last in any run, because it replaces the fixture's game. |
 | `selftest` | `DialogueClickThroughFinishesDialogue` | The runner's dialogue clicking reaches the end of a dialogue. |
 | `selftest` | `InputBlockedAndMuted` | Input blocking and muting are in place. |
+| `selftest` | `NoSaveTestRunsOnBootMenu` | A test marked `NeedsSave = false` runs on the boot menu, before any save is loaded. |
 
 ## Choosing what runs
 
@@ -112,6 +114,9 @@ internal static class MyModTests
 }
 ```
 
+- A test of the main menu itself takes `[InGameTest(Suite = ..., NeedsSave = false)]`. It runs on the boot
+  menu before the save loads, and must leave the game on the main menu. A run where no test needs the
+  save skips loading it, which saves about 10 s.
 - `ctx.Assert`/`ctx.Fail` fail the test; `ctx.Note`/`ctx.Record` add to the report.
 - `ModScope.Includes(harmonyId)` tells a check that judges every mod which ones are in scope.
 - Use `WaitForSecondsRealtime`: `Time.timeScale` may be raised.
