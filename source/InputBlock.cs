@@ -40,14 +40,97 @@ namespace InGameTests
                 .Where(m => m != null);
         }
 
-        private static void Postfix(ref bool __result)
+        private static KeyCode injectedKey;
+        private static string injectedName;
+        private static int injectedFrame = -10;
+
+        /// <summary>Whether a key can be injected: only while input is blocked, since these patches deliver it.</summary>
+        internal static bool CanInject => !Plugin.Options.AllowInput;
+
+        /// <summary>
+        /// Makes the game read one key press on the given frame, as if a player pressed it: GetKeyDown,
+        /// GetKey and anyKeyDown on that frame, GetKeyUp on the next. unityName is the name the
+        /// string overloads take, such as "f5" or "space".
+        /// </summary>
+        internal static void InjectKey(KeyCode key, string unityName, int frame)
+        {
+            injectedKey = key;
+            injectedName = unityName;
+            injectedFrame = frame;
+        }
+
+        /// <summary>A probe session's virtual left mouse button.</summary>
+        private static bool leftHeld;
+        private static int leftDownFrame = -10;
+        private static int leftUpFrame = -10;
+
+        /// <summary>
+        /// Presses or releases the virtual left button. Called from a coroutine, so the change is read
+        /// as GetMouseButtonDown/Up on the next frame, where the input module will see it.
+        /// </summary>
+        internal static void SetLeftButton(bool down)
+        {
+            leftHeld = down;
+            if (down)
+            {
+                leftDownFrame = Time.frameCount + 1;
+            }
+            else
+            {
+                leftUpFrame = Time.frameCount + 1;
+            }
+        }
+
+        private static void Postfix(ref bool __result, MethodBase __originalMethod, object[] __args)
         {
             if (__result)
             {
                 Suppressed++;
                 __result = false;
             }
+            int frame = Time.frameCount;
+            if (__originalMethod.Name.StartsWith("GetMouseButton", System.StringComparison.Ordinal))
+            {
+                if (__args.Length == 1 && __args[0] is int button && button == 0)
+                {
+                    switch (__originalMethod.Name)
+                    {
+                        case "GetMouseButton": __result = leftHeld; break;
+                        case "GetMouseButtonDown": __result = frame == leftDownFrame; break;
+                        case "GetMouseButtonUp": __result = frame == leftUpFrame; break;
+                    }
+                }
+                return;
+            }
+            if (__originalMethod.Name == "get_anyKey" && leftHeld || __originalMethod.Name == "get_anyKeyDown" && frame == leftDownFrame)
+            {
+                __result = true;
+                return;
+            }
+            if (frame != injectedFrame && frame != injectedFrame + 1)
+            {
+                return;
+            }
+            bool down = frame == injectedFrame;
+            switch (__originalMethod.Name)
+            {
+                case "GetKeyDown":
+                case "GetKey":
+                    __result = down && Matches(__args);
+                    break;
+                case "GetKeyUp":
+                    __result = !down && Matches(__args);
+                    break;
+                case "get_anyKey":
+                case "get_anyKeyDown":
+                    __result = down;
+                    break;
+            }
         }
+
+        private static bool Matches(object[] args) =>
+            args.Length == 1 && (args[0] is KeyCode key ? key == injectedKey
+                : args[0] is string name && string.Equals(name, injectedName, System.StringComparison.OrdinalIgnoreCase));
     }
 
     [HarmonyPatch(typeof(Input), nameof(Input.mousePosition), MethodType.Getter)]
@@ -56,9 +139,28 @@ namespace InGameTests
         // Off-screen: UI raycasts hit nothing, so nothing hovers or highlights.
         private static readonly Vector3 OffScreen = new Vector3(-10000f, -10000f, 0f);
 
+        /// <summary>A probe session's virtual mouse; null keeps the mouse off-screen.</summary>
+        internal static Vector3? Virtual;
+
         private static bool Prepare() => !Plugin.Options.AllowInput;
 
-        private static void Postfix(ref Vector3 __result) => __result = OffScreen;
+        private static void Postfix(ref Vector3 __result) => __result = Virtual ?? OffScreen;
+    }
+
+    /// <summary>
+    /// In a probe session the game window counts as focused. Unity's input module ignores the mouse
+    /// in an unfocused window, and you usually watch a session from another window.
+    /// </summary>
+    [HarmonyPatch]
+    internal static class SessionFocus
+    {
+        private static MethodBase Getter => AccessTools.PropertyGetter(typeof(UnityEngine.EventSystems.EventSystem), "isFocused");
+
+        private static bool Prepare() => Plugin.Options.Session && !Plugin.Options.AllowInput && Getter != null;
+
+        private static MethodBase TargetMethod() => Getter;
+
+        private static void Postfix(ref bool __result) => __result = true;
     }
 
     [HarmonyPatch]

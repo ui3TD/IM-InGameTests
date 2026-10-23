@@ -10,7 +10,8 @@ namespace InGameTests
     /// Dev-only in-game test runner. Inert unless the game is launched with
     /// <c>-imtest &lt;suite&gt;</c>; then it moves saves into the run's folder, blocks
     /// settings and achievement writes, captures every error, loads a fixture save,
-    /// runs the [InGameTest] methods, writes results.json and quits.
+    /// runs the [InGameTest] methods, writes results.json and quits. With <c>-imtest-session</c>
+    /// it does the same setup and then waits for probe session commands instead (see Session).
     /// </summary>
     [BepInPlugin(PluginGuid, "InGameTests", PluginInfo.PLUGIN_VERSION)]
     public class Plugin : BaseUnityPlugin
@@ -35,7 +36,7 @@ namespace InGameTests
             // Tells the host script the runner is alive (it gives up early without this).
             File.WriteAllText(Path.Combine(Options.OutDir, "started.txt"), DateTime.Now.ToString("o"));
             LogCapture.Start();
-            Logger.LogInfo("In-game test mode: suite=" + Options.Suite + (Options.LoadVanilla ? " (load vanilla)" : "")
+            Logger.LogInfo("In-game test mode: " + (Options.Session ? "probe session" : "suite=" + Options.Suite) + (Options.LoadVanilla ? " (load vanilla)" : "")
                 + (Options.Load.Count > 0 ? " (load: " + string.Join(", ", Options.Load.ToArray()) + ")" : "") + " out=" + Options.OutDir);
 
             // Every step is guarded: the game ships a stripped Unity, so an API that compiles
@@ -61,7 +62,7 @@ namespace InGameTests
                     prefix: new HarmonyMethod(typeof(ModFilter), nameof(ModFilter.Prefix))));
             }
 
-            StartCoroutine(Runner.Run());
+            StartCoroutine(Options.Session ? Session.Run() : Runner.Run());
         }
 
         /// <summary>Startup steps that failed; non-empty means the run must not load a save.</summary>
@@ -96,6 +97,13 @@ namespace InGameTests
         public readonly System.Collections.Generic.List<string> Load = new System.Collections.Generic.List<string>();
         public bool Sound;
 
+        /// <summary>A probe session: wait for commands instead of running tests.</summary>
+        public bool Session;
+        public bool NoSave;
+        public float IdleMinutes = 30f;
+        public float MaxMinutes = 120f;
+        public float CommandMinutes = 10f;
+
         /// <summary>Returns null when the game was not launched in test mode.</summary>
         public static TestOptions Parse(string[] args)
         {
@@ -108,6 +116,21 @@ namespace InGameTests
                     case "-imtest":
                         options = options ?? new TestOptions();
                         options.Suite = next ?? "all";
+                        break;
+                    case "-imtest-session":
+                        Ensure(ref options).Session = true;
+                        break;
+                    case "-imtest-no-save":
+                        Ensure(ref options).NoSave = true;
+                        break;
+                    case "-imtest-idle":
+                        Ensure(ref options).IdleMinutes = Minutes(next);
+                        break;
+                    case "-imtest-max":
+                        Ensure(ref options).MaxMinutes = Minutes(next);
+                        break;
+                    case "-imtest-command-limit":
+                        Ensure(ref options).CommandMinutes = Minutes(next);
                         break;
                     case "-imtest-load":
                         Ensure(ref options).Load.Add(next);
@@ -139,7 +162,7 @@ namespace InGameTests
                 }
             }
 
-            if (options == null || options.Suite == null)
+            if (options == null || (options.Suite == null && !options.Session))
             {
                 return null;
             }
@@ -158,6 +181,8 @@ namespace InGameTests
             }
             return options;
         }
+
+        private static float Minutes(string text) => float.Parse(text, System.Globalization.CultureInfo.InvariantCulture);
 
         private static TestOptions Ensure(ref TestOptions options)
         {

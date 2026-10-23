@@ -1,0 +1,37 @@
+# A first probe session on the shipped test save. Run it with:
+#   python probe_session.py start          (in one terminal; it watches the game)
+#   python probe_session.py play examples/first-session.txt
+#   python probe_session.py stop
+# Every name below is the base game's own, so this works with any mods loaded.
+
+# Where the game is: scene, date, clock, open popup.
+state
+
+# Read one value; get takes a type, then fields and properties.
+get staticVars.dateTime
+
+# Save a snap to come back to later.
+snap start
+
+# Record every call of a method: arguments, result, game date and caller.
+watch mainScript.Time_SetState
+
+# Run the clock a week, clicking through dialogues and popups as a test run does; the reply lists the watched calls.
+step 1w
+calls 5
+
+# Every idol's ID in one line: [*] takes every item of a list.
+get data_girls.girl[*].id
+
+# The agency's numbers, each with the game method it comes from.
+status
+
+# Run until an error is logged, for at most a game month (with no error, it stops at the limit).
+until error within 1m
+
+# What those five weeks changed in the save, against the snap: the date and the agency's resources (money, fans, buzz...).
+diff start now ^(staticVars__dateTime|resources__Resources)
+
+# Back to the snap: the date is the first one again.
+restore start
+get staticVars.dateTime

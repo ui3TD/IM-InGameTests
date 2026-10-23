@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The runner's parts that need no game: compiled in from source, so the tests need no game DLLs. -->
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\source\SessionCommand.cs" Link="Runner\SessionCommand.cs" />
+    <Compile Include="..\..\source\PathReader.cs" Link="Runner\PathReader.cs" />
+    <Compile Include="..\..\source\CoroutineDriver.cs" Link="Runner\CoroutineDriver.cs" />
+    <Compile Include="..\..\source\LabelText.cs" Link="Runner\LabelText.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.2" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

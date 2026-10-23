@@ -8,3 +8,5 @@ ignore.local.txt
 # Your own narrowing of which mods the per-mod checks judge
 scope.local.txt
 __pycache__/
+# Probe session probes: one-off, never committed
+probes/

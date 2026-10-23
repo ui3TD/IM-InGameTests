@@ -141,7 +141,7 @@ namespace InGameTests
         }
 
         /// <summary>Steps a bootstrap phase, failing the result if it throws.</summary>
-        private static IEnumerator Guarded(IEnumerator phase, TestResult result)
+        internal static IEnumerator Guarded(IEnumerator phase, TestResult result)
         {
             while (true)
             {
@@ -164,7 +164,7 @@ namespace InGameTests
             }
         }
 
-        private static IEnumerator BootToMenu(TestResult result)
+        internal static IEnumerator BootToMenu(TestResult result)
         {
             if (Plugin.StartupErrors.Count > 0)
             {
@@ -210,7 +210,7 @@ namespace InGameTests
             yield return new WaitForSecondsRealtime(2f);
         }
 
-        private static IEnumerator LoadFixture(TestResult result)
+        internal static IEnumerator LoadFixture(TestResult result)
         {
             LogCapture.Phase = "load";
             yield return WaitFor(AtMainMenu, 30f, "the main menu, where a test with NeedsSave = false must leave the game", result);
@@ -362,7 +362,7 @@ namespace InGameTests
         /// Fails the result with the errors logged since fromIndex: all of them from 0, else those
         /// logged in the given phase (default: the result's own).
         /// </summary>
-        private static void AddLogFailures(TestResult result, int fromIndex, string phase = null)
+        internal static void AddLogFailures(TestResult result, int fromIndex, string phase = null)
         {
             foreach (LogEntry e in LogCapture.Failures(fromIndex))
             {
@@ -380,7 +380,7 @@ namespace InGameTests
         /// next to this one (InGameTests.*.dll) are loaded here. Failures are reported
         /// under bootstrap.
         /// </summary>
-        private static void LoadTestAssemblies(TestResult result)
+        internal static void LoadTestAssemblies(TestResult result)
         {
             string dir = Path.GetDirectoryName(typeof(Runner).Assembly.Location);
             foreach (string path in Directory.GetFiles(dir, "InGameTests.*.dll"))

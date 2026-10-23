@@ -3,6 +3,8 @@
 Automated tests that run **inside Idol Manager** with your mods loaded, covering what unit tests
 can't: the Unity lifecycle, real game data, and all mods loaded together. One command starts the
 game, loads a save, runs the tests, writes the results and quits, in about 40 seconds.
+For one-off questions, a [probe session](#probe-sessions) keeps the game running and takes one
+command at a time: run the clock to a day, read a value, run until a method is called.
 
 ```
 python run_ingame_tests.py                   # smoke suite: load the save, run 4 in-game weeks
@@ -153,6 +155,148 @@ And it passes all of these:
 Anything else stays in the test project that uses it. Player actions, lookups and scoped settings go in
 `Game`, instruments in `TestTools`. Runner code that test projects don't call is `internal`.
 
+## Probe sessions
+
+A probe session keeps the game running and takes one command at a time, so you can look at the
+game the way you would with a debugger: run the clock to a day, read a value, run one more day,
+read it again, or run until a method is called. A session isn't a test. Nothing passes or fails,
+and nothing from it is committed. It answers one-off questions without a new test and a new boot
+for each question. When a finding has to stay true, write a test for it.
+
+### Try it
+
+[examples/first-session.txt](examples/first-session.txt) is a short session on the shipped test save,
+with a comment on each command. Run it in three steps:
+
+```
+python probe_session.py start                              # launches the game; leave this terminal open (it watches the game)
+python probe_session.py play examples/first-session.txt    # in a second terminal: each command and its reply
+python probe_session.py stop                               # quits the game and checks your saves
+```
+
+Part of what `play` prints. Your numbers and dialogue choices will differ: random events and your mods change them.
+
+```
+> step 1w
+Now 2024-03-31 04:10 (was 2024-03-24 03:50)
+2 watched calls:
+  2024-03-24 03:50  mainScript.Time_SetState(fast)   from Game.Advance
+  2024-03-31 04:10  mainScript.Time_SetState(pause)   from Game.Advance
+note: Dialogue choice taken: What is it?
+note: Dialogue choice taken: I think I'd like to see that
+...
+
+> status
+Date:            2024-03-31 04:10   (staticVars.dateTime)
+Money:           373,731,306   (resources.Money())
+Fans:            675,002   (resources.GetFansTotal())
+Fans in groups:  675,002   (the people of every active idol's fan groups, added up)
+Fame:            level 10, 731751 points   (resources.GetFameLevel(), resources.Get(fame))
+...
+```
+
+`step` clicks through dialogues and popups as a test run does, and lists each choice it took.
+
+Then send your own commands one at a time with `python probe_session.py send "<command>"`;
+`send help` lists them. [tools/probe-template](tools/probe-template) is the example for a probe, the
+C# you run when a command isn't enough (see below).
+
+### Starting and the commands
+
+`start` takes `--save`, `--load`, `--load-vanilla`, `--allow-input`, `--sound` and `--timescale`,
+which work as in a test run. With `--no-save` the session stays on the main menu.
+
+The session has the same safety setup as a test run. Saves go to the session's folder, settings and
+Steam writes are blocked, input is blocked and the game is muted unless you ask otherwise, and
+`stop` checks that your save folder didn't change. The clock is paused between commands.
+
+| Command | What it does |
+|---|---|
+| `step 3d`, `step 2w`, `step 6h`, `step 1m`, `step to 2024-05-01 [09:00]` | Runs the clock by hours, days, weeks or months, or to a date, then pauses it. Dialogues and popups are clicked through as in a test run. |
+| `until <Type.Method> [n] [within 3m]` | Runs the clock until the method has been called n times (default once), and lists the first calls with their arguments and results. It gives up after the game time `within` names (default one year). |
+| `until error [within 3m]` | Runs the clock until an error that isn't on the ignore list is logged. |
+| `get <path>` | Reads a value: a type, then fields and properties. `[3]` takes a list index or a dictionary key, `[id=3]` takes the items whose `id` reads `3`, and `[*]` takes every item. Examples: `staticVars.dateTime`, `data_girls.girl[id=3]`, `data_girls.girl[*].status`. It never calls methods, so it can't change the game. An object shows its fields, one level deep. |
+| `watch <Type.Method>`, `unwatch [<Type.Method>]`, `calls [n]` | Records every call of a method, with its arguments, its result or exception, the game date and the method that called it, in `watch.log`. `calls` shows the last ones. Replies to `step` and `until` list the calls made during them. |
+| `status` | The agency's numbers through the game's own methods, each line naming its source: date, money, fans (the game's total, and the idols' fan groups added up), fame, buzz, scandal points and active idols. |
+| `patches <Type.Method>` | Lists every Harmony patch on a method: its kind, owner, priority and the order it was applied in. |
+| `snap <name>`, `restore <name>`, `diff <a> <b> [regex]` | Quicksaves to a named snap, quickloads one, or lists the save values that differ between two snaps (`now` makes a fresh quicksave). A regex limits the diff to matching paths. A load changes a few values on its own; `SaveLoadTests` lists them. |
+| `run <probe.dll> <Class.Method>` | Runs a probe (see below). |
+| `state` | Shows the date, the clock, the open popup, what's watched, the snaps and the errors logged so far. |
+| `help`, `quit` | Lists the commands; quits the game. |
+
+`Type.Method` names every overload of that method declared on that type. A nested type is written
+with dots (`data_girls.girls`), and a property getter is `get_Name`. A watch only records; it
+changes no argument or result. Its prefix runs before every other prefix, so it sees the arguments
+as the caller passed them, and its finalizer runs after every postfix, so it sees the final result.
+A very small method, such as a plain getter, can be inlined into code the game compiled before the
+watch, and those calls then don't show. Watch its caller instead.
+
+Besides `send`, the launcher has these:
+
+| Command | What it does |
+|---|---|
+| `play <script>` | Sends a file's commands in order and prints each reply. Lines starting with `#` are comments, and `wait 2s` waits. It stops at the first error. |
+| `eval "<C# statements>"` | Runs the statements as a one-off probe, for anything that needs a method call, such as `eval "ctx.Record(\"money\", resources.Money());"`. It's built in `probes/_eval/`. |
+| `restart` | Snaps the game, rebuilds the runner, and starts again from the snap with the same options and watches, so a change to the runner doesn't cost the game in progress. The new watchdog writes to `InGameTests\watchdog.log`. |
+| `cancel`, `tail [n]` | Stops the running command; prints the end of the transcript. |
+
+**Probes** are for anything a command can't do. A probe is a method with a test's signature,
+`static IEnumerator Name(TestContext ctx)`, in a small project of its own. Copy `tools/probe-template`
+to `probes/<name>/`, which isn't committed, and run it with
+`python probe_session.py run probes/<name> Probes.Example`. That builds the project and runs the method.
+The helpers in [Helpers](#helpers) work in a probe. `ctx.Record` and `ctx.Note` go into the reply, and
+`ctx.Fail` shows as an error. A rebuilt probe loads again under the same name. A probe that should
+stay becomes a test when you add `[InGameTest]` and move it to a test project.
+
+**Limits.** A frozen game can't stop itself, so the `start` process watches it from outside.
+`send` and `stop` work without it and fail with a message instead of waiting forever.
+
+| If | Then |
+|---|---|
+| A running command passes its real-time limit (`--command-limit`, default 10 min), or you run `probe_session.py cancel` | It stops wherever it is, nested helpers included, runs their cleanup and replies `stopped`. |
+| `until` never sees its calls or its error | It stops at its game-time limit and replies `stopped`. |
+| The clock stops, or a dialogue never ends | The command reports it, as `AdvanceDays` does in a test. |
+| The game stops writing `heartbeat.txt` for 30 s (90 s while starting) | The watchdog kills the game and writes `killed.txt` with the last command and the end of the transcript. |
+| No command arrives for `--idle` minutes (default 30), or the session reaches `--max` minutes (default 120) | The game quits. The watchdog kills it a minute later if it doesn't. |
+| `send` gets no reply within the command limit plus 30 s | It prints how old the heartbeat is and whether the game runs, and exits. |
+| `quit` doesn't end the game within 30 s | `stop` kills it. The save check runs either way. |
+
+Exit codes: 0 when the reply is `ok` or `stopped`, 1 for `error`, 2 when there is no session or no reply.
+Each session has a folder in `...\Idol Manager\InGameTests\session-<time>\`. It holds `transcript.txt`
+(every command and reply), `watch.log`, the snaps and the session's saves.
+
+### Player input, for exceptional cases
+
+The commands above work on the game's code directly, and that's what a session is for. When the
+question is the input path itself, such as a bug that only happens when a person clicks, or a mod's
+screen that misbehaves, a session can also play like a person. Nothing uses this unless you send
+these commands:
+
+| Command | What it does |
+|---|---|
+| `buttons [regex]` | Lists what a click could reach right now: each control whose centre isn't covered, with its label, kind and place. A regex filters the list; the numbers stay those of the whole list. |
+| `click #n`, `click <label>` | Moves the virtual mouse to the control and clicks it. |
+| `drag <from> to <to>` | Presses on one control, holds, moves to the other and releases. |
+| `key <key>` | Presses a key for one frame, such as `key F5` or `key Space`. |
+| `type <text>` | Types into the text field that has focus (click it first), then presses Enter. |
+
+The mouse and keys are virtual, at the level of Unity's `Input`, which the input block patches
+anyway. So Unity's own input module makes the hover, press, click and drag events, and game code that
+reads the mouse itself (context menus open at the mouse, drags follow it) sees the same as for a
+person. The mouse stays where it last clicked. During a session the game window counts as focused,
+because Unity ignores the mouse in an unfocused window. These commands need input blocked, so they
+don't work with `--allow-input`.
+
+Things to know:
+- A control isn't always where it looks: a staffer is dragged by its drag handle, not by its name.
+  When an input does nothing, `watch` the method you expect and try again.
+- A control's label is the text on it, or its object's name. The text is not a meaning: read the
+  value with `get` or `status` before saying what a number is.
+- Right after a scene loads, a fade can cover everything; `buttons` then says what covers the screen.
+
+The clock is paused again after every command, so a speed button or the Space key doesn't keep it
+running; use `step`.
+
 ## Saves and known errors
 
 - `tools/sanitize_save.py` makes a shareable fixture from your own save (renames, swaps modded portrait
@@ -180,6 +324,24 @@ Anything else stays in the test project that uses it. Player actions, lookups an
 | `-v` | | Full stack traces and per-mod patch counts. |
 
 `--load-vanilla` and `--load` affect that run only; your mod list isn't changed.
+
+## Testing the runner
+
+`dotnet test tests/UnitTests` covers the session's command parsing, path reading, labels and
+coroutine stepping. `python -m unittest discover tests` covers the launcher: the watchdog, scripts,
+`eval` and `restart`. Neither needs the game.
+
+`python probe_session.py selftest` runs a session and checks what only the game shows:
+- commands are picked up while the clock is paused;
+- watches see arguments, results and callers;
+- a step and a restore move the date;
+- a game-time limit stops `until`;
+- a probe and `eval` load;
+- `status` matches the game's own money;
+- a virtual click opens a panel, and `key F5` makes the game quicksave;
+- the example script runs;
+- `restart` keeps the date and the watches;
+- your saves are unchanged.
 
 ## License
 

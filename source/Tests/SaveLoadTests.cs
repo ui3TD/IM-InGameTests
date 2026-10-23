@@ -57,8 +57,7 @@ namespace InGameTests.Tests
         internal static void CompareSaves(TestContext ctx, string beforePath, string afterPath, string loadDate, bool sceneLoad, string steps)
         {
             JSONNode before = JSON.Parse(File.ReadAllText(beforePath));
-            var differences = new List<Difference>();
-            Compare(before, JSON.Parse(File.ReadAllText(afterPath)), "", differences);
+            List<SaveDiff.Difference> differences = SaveDiff.Compare(before, JSON.Parse(File.ReadAllText(afterPath)));
             int baseGame = differences.RemoveAll(d => IsBaseGameChange(d, before, loadDate, sceneLoad));
             ctx.Record("saveBytes", new FileInfo(beforePath).Length);
             ctx.Record("baseGameChangesIgnored", baseGame);
@@ -97,7 +96,7 @@ namespace InGameTests.Tests
         /// What the base game changes between two saves around a load, with no mod loaded.
         /// sceneLoad: the load came from the main menu, with a new game scene.
         /// </summary>
-        private static bool IsBaseGameChange(Difference d, JSONNode before, string loadDate, bool sceneLoad)
+        private static bool IsBaseGameChange(SaveDiff.Difference d, JSONNode before, string loadDate, bool sceneLoad)
         {
             switch (Regex.Replace(d.Path, @"\[\d+\]", "[]"))
             {
@@ -158,82 +157,6 @@ namespace InGameTests.Tests
                 }
             }
             return total;
-        }
-
-        private struct Difference
-        {
-            public string Path;
-            public string Before;
-            public string After;
-
-            public override string ToString() => Path + ": " + Short(Before) + " -> " + Short(After);
-
-            private static string Short(string value) => value.Length > 80 ? value.Substring(0, 80) + "..." : value;
-        }
-
-        /// <summary>Adds every value that differs, objects by key and lists by index.</summary>
-        private static void Compare(JSONNode a, JSONNode b, string path, List<Difference> differences)
-        {
-            if (a is JSONClass objA && b is JSONClass objB)
-            {
-                var keysA = new HashSet<string>(Keys(objA));
-                var keysB = new HashSet<string>(Keys(objB));
-                foreach (string key in keysA)
-                {
-                    Compare(objA[key], keysB.Contains(key) ? objB[key] : null, Join(path, key), differences);
-                }
-                foreach (string key in keysB.Where(k => !keysA.Contains(k)))
-                {
-                    Compare(null, objB[key], Join(path, key), differences);
-                }
-            }
-            else if (a is JSONArray listA && b is JSONArray listB)
-            {
-                if (listA.Count != listB.Count)
-                {
-                    differences.Add(new Difference { Path = path, Before = listA.Count + " items", After = listB.Count + " items" });
-                }
-                for (int i = 0; i < System.Math.Min(listA.Count, listB.Count); i++)
-                {
-                    Compare(listA[i], listB[i], path + "[" + i + "]", differences);
-                }
-            }
-            else
-            {
-                string textA = Describe(a);
-                string textB = Describe(b);
-                if (textA != textB)
-                {
-                    differences.Add(new Difference { Path = path, Before = textA, After = textB });
-                }
-            }
-        }
-
-        private static IEnumerable<string> Keys(JSONClass node)
-        {
-            foreach (KeyValuePair<string, JSONNode> pair in node)
-            {
-                yield return pair.Key;
-            }
-        }
-
-        private static string Join(string path, string key) => path.Length == 0 ? key : path + "." + key;
-
-        private static string Describe(JSONNode node)
-        {
-            if (ReferenceEquals(node, null))
-            {
-                return "(missing)";
-            }
-            if (node is JSONArray)
-            {
-                return "(list of " + node.Count + ")";
-            }
-            if (node is JSONClass)
-            {
-                return "(object)";
-            }
-            return node.Value;
         }
     }
 }

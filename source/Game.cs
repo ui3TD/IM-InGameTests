@@ -31,11 +31,18 @@ namespace InGameTests
         /// set there is kept. Records the dates, dialogue clicks and interventions. Fails only if it
         /// can't get there: the clock stalls, or a dialogue never ends.
         /// </summary>
-        public static IEnumerator AdvanceDays(TestContext ctx, int days)
+        public static IEnumerator AdvanceDays(TestContext ctx, int days) => Advance(ctx, start => start.AddDays(days), null);
+
+        /// <summary>
+        /// <see cref="AdvanceDays"/> to the date target gives for the start date, or until stopWhen
+        /// holds (checked every frame), which isn't a failure.
+        /// </summary>
+        internal static IEnumerator Advance(TestContext ctx, Func<DateTime, DateTime> targetFrom, Func<bool> stopWhen)
         {
             mainScript main = Main;
             DateTime startDate = staticVars.dateTime;
-            DateTime target = startDate.AddDays(days);
+            DateTime target = targetFrom(startDate);
+            bool stopped = false;
             var interventions = new Dictionary<string, int>(StringComparer.Ordinal);
             float realStart = Time.realtimeSinceStartup;
             float lastProgress = realStart;
@@ -56,6 +63,12 @@ namespace InGameTests
 
                 while (staticVars.dateTime < target)
                 {
+                    if (stopWhen != null && stopWhen())
+                    {
+                        stopped = true;
+                        break;
+                    }
+
                     // The game's settings can reapply these; keep the frame rate uncapped.
                     QualitySettings.vSyncCount = 0;
                     Application.targetFrameRate = 1000;
@@ -133,7 +146,7 @@ namespace InGameTests
                 ctx.Note("Auto-resumed clock " + kv.Value + "x: " + kv.Key);
             }
 
-            ctx.Assert(staticVars.dateTime >= target,
+            ctx.Assert(stopped || staticVars.dateTime >= target,
                 "Expected the date to reach " + target.ToString("yyyy-MM-dd") + ", got " + staticVars.dateTime.ToString("yyyy-MM-dd"));
         }
 
