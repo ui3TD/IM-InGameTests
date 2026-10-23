@@ -7,10 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\source\SessionCommand.cs" Link="Runner\SessionCommand.cs" />
-    <Compile Include="..\..\source\PathReader.cs" Link="Runner\PathReader.cs" />
-    <Compile Include="..\..\source\CoroutineDriver.cs" Link="Runner\CoroutineDriver.cs" />
-    <Compile Include="..\..\source\LabelText.cs" Link="Runner\LabelText.cs" />
+    <Compile Include="..\..\source\Session\SessionCommand.cs" Link="Runner\SessionCommand.cs" />
+    <Compile Include="..\..\source\Session\PathReader.cs" Link="Runner\PathReader.cs" />
+    <Compile Include="..\..\source\Session\CoroutineDriver.cs" Link="Runner\CoroutineDriver.cs" />
+    <Compile Include="..\..\source\Session\LabelText.cs" Link="Runner\LabelText.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,6 +1,6 @@
 """Run the in-game test suite: launch Idol Manager in test mode, wait for results.json, report.
 
-The InGameTests BepInEx plugin does the work inside the game (see source/Runner.cs).
+The InGameTests BepInEx plugin does the work inside the game (see source/Runner/Runner.cs).
 This script builds and deploys the plugin, stages the fixture save and ignore list,
 launches IM.exe with -imtest, waits for the results (returning as soon as they
 exist), kills the game on timeout, and prints a summary.
