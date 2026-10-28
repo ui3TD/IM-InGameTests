@@ -61,6 +61,59 @@ def game_running() -> bool:
     return "IM.exe" in out
 
 
+def steam_signed_in() -> bool:
+    """True when the Steam client runs with a user signed in, as Steam records it in the registry."""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam\ActiveProcess") as key:
+            pid = winreg.QueryValueEx(key, "pid")[0]
+            user = winreg.QueryValueEx(key, "ActiveUser")[0]
+    except OSError:
+        return False
+    if not pid or not user:
+        return False
+    out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True).stdout
+    return str(pid) in out
+
+
+def steam_exe() -> Path | None:
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as key:
+            exe = Path(winreg.QueryValueEx(key, "SteamExe")[0])
+            if exe.is_file():
+                return exe
+    except OSError:
+        pass
+    exe = Path(r"C:\Program Files (x86)\Steam\steam.exe")
+    return exe if exe.is_file() else None
+
+
+def ensure_steam(timeout: float = 180) -> bool:
+    """The game is launched directly, so Steam must already run with a user signed in. Starts Steam when it
+    doesn't run and waits for the sign-in; False (with a message) when that doesn't happen."""
+    if steam_signed_in():
+        return True
+    out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq steam.exe", "/NH"], capture_output=True, text=True).stdout
+    if "steam.exe" not in out.lower():
+        exe = steam_exe()
+        if exe is None:
+            print("Steam isn't running and steam.exe wasn't found; start Steam, then try again.")
+            return False
+        print("Steam isn't running; starting it ...", flush=True)
+        subprocess.Popen([str(exe), "-silent"])
+    else:
+        print("Waiting for Steam to sign in ...", flush=True)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if steam_signed_in():
+            time.sleep(10)  # Steam signs in before its game services answer
+            return True
+        time.sleep(2)
+    print(f"Steam didn't sign in within {timeout:.0f}s; sign in to Steam, then try again.")
+    return False
+
+
 def build(project: Path, game_dir: Path) -> None:
     print(f"Building {project.name} ...")
     result = subprocess.run(["dotnet", "build", str(project), "-c", "Release", "-nologo", "-v", "q",
@@ -212,6 +265,8 @@ def launch_and_wait(cmd: list[str], game_dir: Path, out_dir: Path, timeout: floa
     # Launch IM.exe directly (not via steam -applaunch) so the script owns the process
     # and can kill it. Steam must be running; these env vars tell Steamworks which app this is.
     env = dict(os.environ, SteamAppId=APP_ID, SteamGameId=APP_ID)
+    if not ensure_steam():
+        return 2
     start = time.monotonic()
     proc = subprocess.Popen(cmd, cwd=str(game_dir), env=env)
 

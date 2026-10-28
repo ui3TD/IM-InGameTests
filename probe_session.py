@@ -225,6 +225,8 @@ def start_session(args) -> int:
         cmd.append("-imtest-sound")
 
     env = dict(os.environ, SteamAppId=runner.APP_ID, SteamGameId=runner.APP_ID)
+    if not runner.ensure_steam():
+        return start_failed("Steam isn't running with a user signed in; the game needs it.")
     started_at = time.time()
     proc = subprocess.Popen(cmd, cwd=str(game_dir), env=env)
     write_state({"out_dir": str(out_dir), "status": "starting", "started_at": started_at, "watchdog_pid": os.getpid(),

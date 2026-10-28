@@ -26,7 +26,8 @@ Exit code: 0 passed, 1 a test failed, 2 no results (crash, timeout or setup prob
 
 ## Requirements
 
-- Windows, Idol Manager from Steam, and Steam running.
+- Windows and Idol Manager from Steam. The scripts start Steam when it isn't running and wait until you're
+  signed in.
 - [BepInEx 5](https://github.com/BepInEx/BepInEx) in the game folder.
 - [.NET SDK](https://dotnet.microsoft.com/download) and Python 3.10+.
 
